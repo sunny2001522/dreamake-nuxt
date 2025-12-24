@@ -311,7 +311,8 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
 <template>
   <div class="card p-4">
     <div class="flex items-center justify-between mb-3">
-      <label class="text-sm font-medium text-stone-700">語音</label>
+      <label class="text-sm font-medium text-stone-700">2. 聲音</label>
+      <span class="text-xs text-stone-400">選擇要模仿的人聲</span>
     </div>
 
     <!-- Hidden file input -->

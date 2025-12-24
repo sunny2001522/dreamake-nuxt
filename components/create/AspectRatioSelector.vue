@@ -18,7 +18,7 @@ const options: { value: AspectRatio; label: string; icon: any }[] = [
 
 <template>
   <div class="space-y-2">
-    <label class="text-sm font-medium text-gray-700">畫面比例</label>
+    <label class="text-sm font-medium text-stone-700">3. 影片比例</label>
     <div class="flex gap-2">
       <button
         v-for="option in options"

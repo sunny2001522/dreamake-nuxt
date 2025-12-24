@@ -31,28 +31,25 @@ onMounted(async () => {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
       <!-- Left Column: Inputs -->
       <div class="space-y-6">
-        <!-- Image Uploader -->
-        <ImageUploader />
+        <!-- Step 1 & 2: Image and Voice side by side -->
+        <div class="grid grid-cols-2 gap-4">
+          <ImageUploader />
+          <VoicePicker />
+        </div>
 
-        <!-- Voice Picker -->
-        <VoicePicker />
-
-        <!-- Persona Panel -->
-        <PersonaPanel @persona-update="handlePersonaUpdate" />
-
-        <!-- Topic Suggestions (shows when persona is set) -->
-        <CreateTopicSuggestions :persona-content="personaContent" />
-
-        <!-- Transcript Input -->
-        <CreateTranscriptInput />
-
-        <!-- Aspect Ratio Selector -->
+        <!-- Step 3: Aspect Ratio -->
         <CreateAspectRatioSelector
           :model-value="generationStore.draft.aspectRatio"
           @update:model-value="generationStore.updateDraft({ aspectRatio: $event })"
         />
 
-        <!-- Subtitle Settings -->
+        <!-- Step 4: Transcript Input (includes PersonaPanel trigger + TopicSuggestions) -->
+        <CreateTranscriptInput
+          :persona-content="personaContent"
+          @persona-update="handlePersonaUpdate"
+        />
+
+        <!-- Advanced Settings (collapsible) -->
         <CreateSubtitleSettings />
 
         <!-- Generate Buttons -->

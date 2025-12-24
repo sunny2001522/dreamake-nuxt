@@ -28,7 +28,7 @@ const isLoading = ref(false)
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <HistoryHistoryItem
+      <HistoryItem
         v-for="video in videos"
         :key="video.id"
         :video="video"
