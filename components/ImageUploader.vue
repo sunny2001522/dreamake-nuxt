@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SavedImage } from '~/types'
+import type { SavedImage, AspectRatio } from '~/types'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -22,11 +22,13 @@ const deletingId = ref<string | null>(null)
 // File input ref
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// Camera refs
+// Camera refs and state
 const videoRef = ref<HTMLVideoElement | null>(null)
 const stream = ref<MediaStream | null>(null)
 const cameraError = ref<string | null>(null)
 const cameraLoading = ref(false)
+const currentFacing = ref<'user' | 'environment'>('user')
+const selectedRatio = ref<'portrait' | 'landscape'>('portrait')
 
 // Load saved images on mount
 onMounted(() => {
@@ -49,9 +51,6 @@ async function loadSavedImages() {
 
   try {
     isLoadingImages.value = true
-    // TODO: Implement Supabase image loading
-    // const images = await $fetch('/api/images', { method: 'GET' })
-    // savedImages.value = images
     savedImages.value = []
   } catch (err) {
     console.error('Failed to load saved images:', err)
@@ -72,18 +71,8 @@ function handleCloseModal() {
 
 async function processFile(file: File) {
   try {
-    // Create preview URL
     const previewUrl = URL.createObjectURL(file)
-
-    // Update store with avatar
     generationStore.setAvatar(null, previewUrl)
-
-    // TODO: Upload to Supabase and get permanent URL
-    // const uploadResult = await $fetch('/api/upload', {
-    //   method: 'POST',
-    //   body: formData
-    // })
-
     showModal.value = false
     toastStore.success('照片已上傳')
   } catch (err) {
@@ -96,10 +85,7 @@ function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-
   processFile(file)
-
-  // Reset input
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
   }
@@ -121,41 +107,30 @@ function handleDrop(event: DragEvent) {
   event.preventDefault()
   event.stopPropagation()
   isDragging.value = false
-
   const file = event.dataTransfer?.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-
   processFile(file)
 }
 
 async function handleUrlSubmit() {
   if (!imageUrl.value.trim()) return
-
   isLoadingUrl.value = true
   urlError.value = null
 
   try {
-    // Validate URL format
     new URL(imageUrl.value.trim())
-
-    // Fetch image through proxy API
     const response = await $fetch<Blob>(`/api/upload?url=${encodeURIComponent(imageUrl.value.trim())}`, {
       responseType: 'blob',
     })
-
-    // Validate it's an image
     if (!response.type.startsWith('image/')) {
       throw new Error('網址不是有效的圖片')
     }
-
     const url = new URL(imageUrl.value.trim())
     const fileName = url.pathname.split('/').pop() || 'image.jpg'
     const file = new File([response], fileName, { type: response.type })
-
     await processFile(file)
     imageUrl.value = ''
   } catch (err) {
-    console.error('Failed to load image from URL:', err)
     if (err instanceof TypeError) {
       urlError.value = '請輸入有效的網址格式'
     } else if (err instanceof Error) {
@@ -169,10 +144,7 @@ async function handleUrlSubmit() {
 }
 
 function handleSelectSavedImage(image: SavedImage) {
-  const dataUrl = image.imageData.startsWith('data:')
-    ? image.imageData
-    : image.imageData // It might be a URL
-
+  const dataUrl = image.imageData.startsWith('data:') ? image.imageData : image.imageData
   generationStore.setAvatar(image.id ?? null, dataUrl)
   showModal.value = false
 }
@@ -181,11 +153,7 @@ async function handleDeleteImage(event: Event, image: SavedImage) {
   event.stopPropagation()
   const deleteKey = image.supabaseId || String(image.id)
   deletingId.value = deleteKey
-
   try {
-    // TODO: Delete from Supabase
-    // await $fetch(`/api/images/${deleteKey}`, { method: 'DELETE' })
-
     savedImages.value = savedImages.value.filter(img =>
       (img.supabaseId || String(img.id)) !== deleteKey
     )
@@ -203,12 +171,14 @@ async function startCamera() {
   try {
     cameraLoading.value = true
     cameraError.value = null
-
     stream.value = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user' },
+      video: {
+        facingMode: currentFacing.value,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
       audio: false,
     })
-
     if (videoRef.value) {
       videoRef.value.srcObject = stream.value
     }
@@ -227,24 +197,59 @@ function stopCamera() {
   }
 }
 
+async function switchCamera() {
+  stopCamera()
+  currentFacing.value = currentFacing.value === 'user' ? 'environment' : 'user'
+  await startCamera()
+}
+
 async function handleCameraCapture() {
   if (!videoRef.value) return
 
   try {
+    const video = videoRef.value
     const canvas = document.createElement('canvas')
-    canvas.width = videoRef.value.videoWidth
-    canvas.height = videoRef.value.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.drawImage(videoRef.value, 0, 0)
+    const videoWidth = video.videoWidth
+    const videoHeight = video.videoHeight
+
+    // Calculate crop dimensions based on selected ratio
+    let cropX = 0, cropY = 0, cropWidth = videoWidth, cropHeight = videoHeight
+
+    if (selectedRatio.value === 'portrait') {
+      // 9:16 portrait - crop from center
+      cropHeight = videoHeight
+      cropWidth = Math.floor(videoHeight * 9 / 16)
+      cropX = Math.floor((videoWidth - cropWidth) / 2)
+      cropY = 0
+    } else {
+      // 16:9 landscape - use full video
+      cropWidth = videoWidth
+      cropHeight = videoHeight
+      cropX = 0
+      cropY = 0
+    }
+
+    canvas.width = cropWidth
+    canvas.height = cropHeight
+
+    // Front camera: flip horizontally to match preview mirror
+    if (currentFacing.value === 'user') {
+      ctx.translate(canvas.width, 0)
+      ctx.scale(-1, 1)
+      cropX = videoWidth - cropX - cropWidth
+    }
+
+    ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
 
     canvas.toBlob(async (blob) => {
       if (!blob) return
       const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' })
       stopCamera()
       await processFile(file)
-    }, 'image/jpeg', 0.9)
+    }, 'image/jpeg', 0.92)
   } catch (err) {
     console.error('Failed to capture photo:', err)
     toastStore.error('拍照失敗')
@@ -272,12 +277,13 @@ function handleClearAvatar() {
 }
 
 const hasSavedImages = computed(() => savedImages.value.length > 0)
+const isPortrait = computed(() => selectedRatio.value === 'portrait')
 </script>
 
 <template>
   <div class="card p-4">
     <div class="flex items-center justify-between mb-3">
-      <label class="text-sm font-medium text-stone-700">頭像</label>
+      <label class="font-bold text-stone-800">1. 照片</label>
     </div>
 
     <!-- Hidden file input -->
@@ -292,7 +298,7 @@ const hasSavedImages = computed(() => savedImages.value.length > 0)
     <!-- Preview or Upload Button -->
     <div
       v-if="draft.avatarPreview"
-      class="relative aspect-square max-w-[200px] mx-auto rounded-xl overflow-hidden group cursor-pointer"
+      class="relative aspect-square rounded-xl overflow-hidden group cursor-pointer bg-stone-800"
       @click="handleClick"
     >
       <img
@@ -301,35 +307,21 @@ const hasSavedImages = computed(() => savedImages.value.length > 0)
         class="w-full h-full object-cover"
       />
       <!-- Hover overlay -->
-      <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-        <button
-          class="px-3 py-2 bg-white/90 hover:bg-white rounded-lg text-sm font-medium text-stone-800 flex items-center gap-2"
-          @click.stop="handleClick"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+      <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <span class="px-3 py-2 bg-white/90 hover:bg-white rounded-lg text-sm font-medium text-stone-800">
           更換
-        </button>
-        <button
-          class="p-2 bg-red-500/90 hover:bg-red-500 rounded-lg text-white"
-          @click.stop="handleClearAvatar"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        </span>
       </div>
     </div>
     <button
       v-else
-      class="w-full aspect-square max-w-[200px] mx-auto border-2 border-dashed border-stone-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-colors flex flex-col items-center justify-center cursor-pointer"
+      class="w-full aspect-square border-2 border-dashed border-stone-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-colors flex flex-col items-center justify-center cursor-pointer bg-stone-100"
       @click="handleClick"
     >
-      <svg class="w-10 h-10 mb-2 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg class="w-8 h-8 mb-2 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
-      <p class="text-sm text-stone-500">選擇頭像</p>
+      <p class="text-sm text-stone-500">選擇照片</p>
     </button>
 
     <!-- Modal -->
@@ -339,7 +331,122 @@ const hasSavedImages = computed(() => savedImages.value.length > 0)
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
         @click="handleCloseModal"
       >
+        <!-- Camera Modal (full screen style) -->
         <div
+          v-if="modalTab === 'camera'"
+          :class="[
+            'flex flex-col bg-stone-900 rounded-2xl overflow-hidden border border-stone-700 shadow-2xl',
+            isPortrait ? 'h-[85vh] aspect-[9/16]' : 'w-[85vw] aspect-video max-h-[85vh]'
+          ]"
+          @click.stop
+        >
+          <!-- Ratio Toggle -->
+          <div class="px-4 py-2 bg-stone-800 border-b border-stone-700 shrink-0">
+            <div class="flex rounded-lg bg-stone-900 p-1 max-w-md mx-auto">
+              <button
+                class="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all"
+                :class="isPortrait
+                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
+                  : 'text-stone-400 hover:text-white'"
+                @click="selectedRatio = 'portrait'"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                直式 9:16
+              </button>
+              <button
+                class="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all"
+                :class="!isPortrait
+                  ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white'
+                  : 'text-stone-400 hover:text-white'"
+                @click="selectedRatio = 'landscape'"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                橫式 16:9
+              </button>
+            </div>
+          </div>
+
+          <!-- Video Preview -->
+          <div class="flex-1 flex items-center justify-center bg-black overflow-hidden">
+            <div
+              :class="[
+                'relative bg-black h-full',
+                isPortrait ? 'aspect-[9/16]' : 'aspect-video'
+              ]"
+              style="max-width: 100%; max-height: 100%"
+            >
+              <video
+                v-if="cameraError"
+                class="hidden"
+              />
+              <video
+                ref="videoRef"
+                autoplay
+                playsinline
+                muted
+                :class="[
+                  'absolute inset-0 w-full h-full object-cover',
+                  currentFacing === 'user' ? 'scale-x-[-1]' : ''
+                ]"
+              />
+              <div v-if="cameraLoading" class="absolute inset-0 flex items-center justify-center">
+                <svg class="animate-spin w-8 h-8 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+              <div v-if="cameraError" class="absolute inset-0 flex flex-col items-center justify-center text-red-400">
+                <svg class="w-12 h-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p>{{ cameraError }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera Controls -->
+          <div class="p-4 bg-stone-900 flex justify-center items-center gap-6 shrink-0">
+            <!-- Switch camera button -->
+            <button
+              class="p-3 rounded-full bg-stone-700 hover:bg-stone-600 text-white transition-colors"
+              @click="switchCamera"
+            >
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+
+            <!-- Capture button -->
+            <button
+              class="w-16 h-16 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white flex items-center justify-center transition-all shadow-lg"
+              :disabled="cameraLoading || !stream"
+              @click="handleCameraCapture"
+            >
+              <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+
+            <!-- Close button (symmetric placeholder) -->
+            <button
+              class="p-3 rounded-full bg-stone-700 hover:bg-stone-600 text-white transition-colors"
+              @click="handleCloseModal"
+            >
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Regular Modal (History/Upload) -->
+        <div
+          v-else
           class="flex flex-col bg-white rounded-2xl overflow-hidden border border-stone-200 shadow-2xl w-[800px] max-w-[90vw] h-[80vh] max-h-[600px]"
           @click.stop
         >
@@ -448,7 +555,7 @@ const hasSavedImages = computed(() => savedImages.value.length > 0)
             <div v-else-if="modalTab === 'upload'" class="space-y-6">
               <!-- Drag & Drop Zone -->
               <div
-                class="border-2 border-dashed rounded-xl p-8 text-center transition-colors"
+                class="border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer"
                 :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-stone-300 hover:border-purple-400'"
                 @dragover="handleDragOver"
                 @dragleave="handleDragLeave"
@@ -488,48 +595,6 @@ const hasSavedImages = computed(() => savedImages.value.length > 0)
                 </div>
                 <p v-if="urlError" class="mt-1 text-sm text-red-500">{{ urlError }}</p>
               </div>
-            </div>
-
-            <!-- Camera Tab -->
-            <div v-else-if="modalTab === 'camera'" class="flex flex-col items-center">
-              <div v-if="cameraError" class="text-center py-12 text-red-500">
-                <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <p>{{ cameraError }}</p>
-              </div>
-              <template v-else>
-                <div class="relative w-full max-w-md aspect-[3/4] bg-black rounded-xl overflow-hidden">
-                  <video
-                    v-if="cameraLoading"
-                    class="hidden"
-                  />
-                  <video
-                    ref="videoRef"
-                    autoplay
-                    playsinline
-                    muted
-                    class="w-full h-full object-cover"
-                  />
-                  <div v-if="cameraLoading" class="absolute inset-0 flex items-center justify-center">
-                    <svg class="animate-spin w-8 h-8 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  </div>
-                </div>
-                <button
-                  class="mt-4 px-6 py-3 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors flex items-center gap-2"
-                  :disabled="cameraLoading || !stream"
-                  @click="handleCameraCapture"
-                >
-                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  拍照
-                </button>
-              </template>
             </div>
           </div>
         </div>
