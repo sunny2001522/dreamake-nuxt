@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+.output
+.nuxt
+
+# Environment files (含敏感資訊)
+.env
+.env.*
+!.env.example
+
+# Local files
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Nuxt dev/build outputs
+.nitro
+.cache
+
+# Testing
+coverage
+.nyc_output
+
+# TypeScript
+*.tsbuildinfo

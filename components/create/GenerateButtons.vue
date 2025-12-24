@@ -1,0 +1,267 @@
+<script setup lang="ts">
+import type { GenerationRecord } from '~/types'
+
+const generationStore = useGenerationStore()
+const authStore = useAuthStore()
+const toastStore = useToastStore()
+const router = useRouter()
+
+const { draft, isGenerating, stage } = storeToRefs(generationStore)
+
+// Generation composable
+const videoGeneration = useVideoGeneration()
+
+// Check if generation can proceed
+const canGenerate = computed(() => {
+  return (
+    draft.value.transcript.trim().length > 0 &&
+    draft.value.avatarPreview &&
+    draft.value.voicePreview?.speakerId &&
+    !isGenerating.value
+  )
+})
+
+// Error messages for disabled state
+const disabledReason = computed(() => {
+  if (isGenerating.value) return '正在生成中...'
+  if (!draft.value.transcript.trim()) return '請先輸入腳本內容'
+  if (!draft.value.avatarPreview) return '請先選擇頭像'
+  if (!draft.value.voicePreview?.speakerId) return '請先選擇語音'
+  return null
+})
+
+// Voice-only generation
+async function handleGenerateVoiceOnly() {
+  if (!canGenerate.value) {
+    toastStore.warning(disabledReason.value || '請先填寫腳本、選擇頭像和語音')
+    return
+  }
+
+  // Check auth
+  if (!authStore.user) {
+    toastStore.error('請先登入帳號以使用生成功能')
+    router.push('/auth')
+    return
+  }
+
+  try {
+    generationStore.setStage('voice')
+    generationStore.setError(null)
+
+    // Generate voice TTS
+    const speakerId = draft.value.voicePreview!.speakerId!
+    const result = await videoGeneration.generateVoice(speakerId, draft.value.transcript)
+
+    // Create audio-only record
+    const record: GenerationRecord = {
+      id: Date.now().toString(),
+      transcript: draft.value.transcript,
+      aspectRatio: draft.value.aspectRatio,
+      duration: 0,
+      createdAt: new Date(),
+      status: 'completed',
+      audioUrl: result.audioUrl,
+      speakerId,
+      title: draft.value.title || undefined,
+      avatarPreview: draft.value.avatarPreview,
+    }
+
+    generationStore.setResult(record)
+    generationStore.setStage('complete')
+    toastStore.success('語音生成完成！')
+  } catch (err: any) {
+    console.error('Voice generation failed:', err)
+    generationStore.setError(err.message || '語音生成失敗')
+    generationStore.setStage('idle')
+    toastStore.error('語音生成失敗', err.message)
+  }
+}
+
+// Full video generation
+async function handleGenerateVideo() {
+  if (!canGenerate.value) {
+    toastStore.warning(disabledReason.value || '請先填寫腳本、選擇頭像和語音')
+    return
+  }
+
+  // Check auth
+  if (!authStore.user) {
+    toastStore.error('請先登入帳號以使用生成功能')
+    router.push('/auth')
+    return
+  }
+
+  // Validate avatar URL
+  if (!draft.value.avatarPreview) {
+    toastStore.error('請上傳頭像照片以生成影片')
+    return
+  }
+
+  try {
+    generationStore.resetGeneration()
+    generationStore.setStage('voice')
+
+    const speakerId = draft.value.voicePreview!.speakerId!
+    const avatarUrl = draft.value.avatarPreview
+
+    // Start video generation
+    const result = await videoGeneration.startGeneration({
+      transcript: draft.value.transcript,
+      speakerId,
+      avatarUrl,
+      aspectRatio: draft.value.aspectRatio,
+      videoModel: draft.value.videoModel,
+    })
+
+    // Poll for completion
+    generationStore.setStage('video')
+    const videoResult = await videoGeneration.pollUntilComplete(
+      result.taskId,
+      result.pollEndpoint,
+      {
+        onStatusChange: (status) => {
+          console.log('Video status:', status)
+        },
+      }
+    )
+
+    // Create completed record
+    const record: GenerationRecord = {
+      id: Date.now().toString(),
+      transcript: draft.value.transcript,
+      aspectRatio: draft.value.aspectRatio,
+      duration: 0,
+      createdAt: new Date(),
+      status: 'completed',
+      audioUrl: result.audioUrl,
+      videoUrl: videoResult.videoUrl,
+      speakerId,
+      title: draft.value.title || undefined,
+      avatarPreview: avatarUrl,
+    }
+
+    generationStore.setResult(record)
+    generationStore.setStage('complete')
+    toastStore.success('影片生成完成！')
+  } catch (err: any) {
+    console.error('Video generation failed:', err)
+    generationStore.setError(err.message || '影片生成失敗')
+    generationStore.setStage('error')
+    toastStore.error('影片生成失敗', err.message)
+  }
+}
+
+// Generate video from existing audio (when audio was already generated)
+async function handleContinueToVideo() {
+  const existingResult = generationStore.generatedResult
+  if (!existingResult?.audioUrl || !existingResult?.speakerId) {
+    toastStore.warning('請先生成語音')
+    return
+  }
+
+  if (!draft.value.avatarPreview) {
+    toastStore.error('請上傳頭像照片以生成影片')
+    return
+  }
+
+  try {
+    generationStore.setStage('video')
+
+    // Start video generation with existing audio
+    const result = await videoGeneration.startGeneration({
+      transcript: draft.value.transcript,
+      speakerId: existingResult.speakerId,
+      avatarUrl: draft.value.avatarPreview,
+      aspectRatio: draft.value.aspectRatio,
+      videoModel: draft.value.videoModel,
+    })
+
+    // Poll for completion
+    const videoResult = await videoGeneration.pollUntilComplete(
+      result.taskId,
+      result.pollEndpoint
+    )
+
+    // Update record with video
+    const record: GenerationRecord = {
+      ...existingResult,
+      videoUrl: videoResult.videoUrl,
+      status: 'completed',
+    }
+
+    generationStore.setResult(record)
+    generationStore.setStage('complete')
+    toastStore.success('影片生成完成！')
+  } catch (err: any) {
+    console.error('Video generation failed:', err)
+    generationStore.setError(err.message || '影片生成失敗')
+    generationStore.setStage('error')
+    toastStore.error('影片生成失敗', err.message)
+  }
+}
+</script>
+
+<template>
+  <div class="card p-4 space-y-3">
+    <!-- Disabled reason hint -->
+    <p
+      v-if="disabledReason && !isGenerating"
+      class="text-xs text-amber-600 text-center"
+    >
+      {{ disabledReason }}
+    </p>
+
+    <!-- Show "Continue to video" if we have audio but no video -->
+    <template v-if="generationStore.generatedResult?.audioUrl && !generationStore.generatedResult?.videoUrl">
+      <button
+        class="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        :disabled="isGenerating || !draft.avatarPreview"
+        @click="handleContinueToVideo"
+      >
+        <svg v-if="isGenerating" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        繼續生成影片
+      </button>
+    </template>
+
+    <!-- Normal generation buttons -->
+    <template v-else>
+      <!-- Voice only button -->
+      <button
+        class="w-full px-4 py-3 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        :disabled="!canGenerate"
+        @click="handleGenerateVoiceOnly"
+      >
+        <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+        僅生成語音
+      </button>
+
+      <!-- Full video button -->
+      <button
+        class="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        :disabled="!canGenerate"
+        @click="handleGenerateVideo"
+      >
+        <svg v-if="isGenerating" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        生成完整影片
+      </button>
+    </template>
+  </div>
+</template>
