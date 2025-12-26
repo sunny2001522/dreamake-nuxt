@@ -1,8 +1,8 @@
 <script setup lang="ts">
 definePageMeta({
   layout: 'default',
-  middleware: 'auth',
 })
+// Note: auth is handled by auth.global.ts middleware
 
 const authStore = useAuthStore()
 const generationStore = useGenerationStore()
@@ -18,9 +18,11 @@ function handlePersonaUpdate(content: string) {
 // Load user data on mount
 onMounted(async () => {
   if (authStore.user) {
+    // Use CMoney email as user identifier for data association
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
     await Promise.all([
-      generationStore.loadDraft(authStore.user.id),
-      preferencesStore.loadPreferences(authStore.user.id),
+      generationStore.loadDraft(userId),
+      preferencesStore.loadPreferences(userId),
     ])
   }
 })

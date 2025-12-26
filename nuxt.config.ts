@@ -3,6 +3,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
 
+  devServer: {
+    port: 3003,
+    https: true,
+  },
+
   modules: [
     '@pinia/nuxt',
     '@nuxtjs/supabase',
@@ -37,11 +42,20 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      // CMoney OIDC
+      baseDomain: process.env.VITE_BASE_DOMAIN || '',
+      oidcDomain: process.env.VITE_OIDC_DOMAIN || '',
+      identityServiceDomain: process.env.VITE_IDENTITY_SERVICE_DOMAIN || '',
+      profileServiceDomain: process.env.VITE_PROFILE_SERVICE_DOMAIN || '',
     },
   },
 
   routeRules: {
     '/create': { ssr: false }, // Client-only for MediaRecorder, Camera APIs
+    '/auth': { ssr: false },   // OIDC login page needs client-side only
+    '/login': { ssr: false },  // OIDC callback needs client-side only
+    '/logout': { ssr: false }, // OIDC callback needs client-side only
+    '/refresh': { ssr: false }, // OIDC callback needs client-side only
   },
 
   nitro: {

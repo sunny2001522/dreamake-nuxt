@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { $manager } = useNuxtApp()
 const authStore = useAuthStore()
 const route = useRoute()
 
@@ -10,8 +11,7 @@ const navLinks = [
 ]
 
 async function handleSignOut() {
-  await authStore.signOut()
-  navigateTo('/')
+  await authStore.logout($manager, '/')
 }
 </script>
 
@@ -52,8 +52,8 @@ async function handleSignOut() {
                 @click="isMenuOpen = !isMenuOpen"
               >
                 <img
-                  :src="authStore.user.user_metadata?.avatar_url || '/default-avatar.png'"
-                  :alt="authStore.user.user_metadata?.full_name || 'User'"
+                  :src="authStore.authInfo.avatar || '/default-avatar.png'"
+                  :alt="authStore.authInfo.nickname || 'User'"
                   class="w-8 h-8 rounded-full object-cover"
                 />
               </button>
@@ -66,10 +66,10 @@ async function handleSignOut() {
                 >
                   <div class="px-4 py-2 border-b border-stone-100">
                     <p class="text-sm font-medium text-stone-800 truncate">
-                      {{ authStore.user.user_metadata?.full_name || authStore.user.email }}
+                      {{ authStore.authInfo.nickname || authStore.authInfo.email }}
                     </p>
                     <p class="text-xs text-stone-500 truncate">
-                      {{ authStore.user.email }}
+                      {{ authStore.authInfo.email }}
                     </p>
                   </div>
 
