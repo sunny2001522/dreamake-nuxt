@@ -18,9 +18,22 @@ const { draft, isGenerating } = storeToRefs(generationStore)
 const personaContent = ref('')
 
 // Mobile modals
-const showImageModal = ref(false)
-const showVoiceModal = ref(false)
 const showSettingsModal = ref(false)
+
+// Desktop history sidebar
+const showHistorySidebar = ref(false)
+
+// Ref to ImageUploader and VoicePicker for direct modal access
+const imageUploaderRef = ref<{ openModal: () => void } | null>(null)
+const voicePickerRef = ref<{ openModal: () => void } | null>(null)
+
+function handleOpenImagePicker() {
+  imageUploaderRef.value?.openModal()
+}
+
+function handleOpenVoicePicker() {
+  voicePickerRef.value?.openModal()
+}
 
 function handlePersonaUpdate(content: string) {
   personaContent.value = content
@@ -160,11 +173,11 @@ async function handleGenerateVideo() {
 
 <template>
   <!-- Mobile Layout -->
-  <div class="lg:hidden min-h-[calc(100vh-64px)] pb-20">
-    <div class="px-4 py-3 space-y-4">
-      <!-- Preview Area (Large) -->
-      <div class="relative">
-        <CreateVideoPreview class="w-full" />
+  <div class="lg:hidden h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+    <div class="flex-1 flex flex-col min-h-0 px-4 py-2 gap-2 pb-20">
+      <!-- Preview Area (Flexible) -->
+      <div class="relative flex-1 min-h-0 flex items-center justify-center">
+        <CreateVideoPreview class="w-full h-full" />
         <!-- History button -->
         <NuxtLink
           to="/history"
@@ -173,83 +186,35 @@ async function handleGenerateVideo() {
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          紀錄
+          
         </NuxtLink>
       </div>
 
       <!-- Topic Suggestions -->
       <CreateMobileTopicSuggestions
+        class="flex-shrink-0"
         :persona-content="personaContent"
         @persona-update="handlePersonaUpdate"
       />
 
       <!-- Transcript Input (Simplified) -->
-      <CreateMobileTranscriptInput />
+      <CreateMobileTranscriptInput class="flex-shrink-0" />
 
       <!-- Generation Progress -->
-      <CreateGenerationProgress v-if="isGenerating" />
+      <CreateGenerationProgress v-if="isGenerating" class="flex-shrink-0" />
     </div>
 
     <!-- Mobile Bottom Toolbar -->
     <CreateMobileToolbar
-      @open-image-picker="showImageModal = true"
-      @open-voice-picker="showVoiceModal = true"
+      @open-image-picker="handleOpenImagePicker"
+      @open-voice-picker="handleOpenVoicePicker"
       @open-settings="showSettingsModal = true"
       @generate-voice="handleGenerateVoice"
       @generate-video="handleGenerateVideo"
     />
 
-    <!-- Image Picker Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showImageModal"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
-        @click="showImageModal = false"
-      >
-        <div
-          class="w-full max-h-[80vh] bg-white rounded-t-2xl overflow-hidden"
-          @click.stop
-        >
-          <div class="flex items-center justify-between px-4 py-3 border-b">
-            <h3 class="font-medium">選擇頭像</h3>
-            <button @click="showImageModal = false" class="p-1">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div class="p-4 overflow-y-auto max-h-[60vh]">
-            <ImageUploader @select="showImageModal = false" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Voice Picker Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showVoiceModal"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
-        @click="showVoiceModal = false"
-      >
-        <div
-          class="w-full max-h-[80vh] bg-white rounded-t-2xl overflow-hidden"
-          @click.stop
-        >
-          <div class="flex items-center justify-between px-4 py-3 border-b">
-            <h3 class="font-medium">選擇語音</h3>
-            <button @click="showVoiceModal = false" class="p-1">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div class="p-4 overflow-y-auto max-h-[60vh]">
-            <VoicePicker @select="showVoiceModal = false" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- Hidden VoicePicker for mobile (modal is teleported to body) -->
+    <VoicePicker ref="voicePickerRef" class="hidden" />
 
     <!-- Settings Modal -->
     <Teleport to="body">
@@ -287,7 +252,7 @@ async function handleGenerateVideo() {
         <div class="h-full overflow-y-auto space-y-3">
           <!-- Step 1 & 2: Image and Voice side by side -->
           <div class="grid grid-cols-2 gap-3">
-            <ImageUploader />
+            <ImageUploader ref="imageUploaderRef" />
             <VoicePicker />
           </div>
 
@@ -307,8 +272,18 @@ async function handleGenerateVideo() {
         <!-- Right Column: Preview -->
         <div class="h-full flex flex-col min-h-0">
           <!-- Video Preview -->
-          <div class="flex-1 min-h-0 flex items-center justify-center">
+          <div class="relative flex-1 min-h-0 flex items-center justify-center">
             <CreateVideoPreview />
+            <!-- Desktop History button -->
+            <button
+              @click="showHistorySidebar = true"
+              class="absolute top-2 right-2 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm hover:bg-white hover:shadow-md transition-all"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>歷史</span>
+            </button>
           </div>
 
           <!-- Generation Progress -->
@@ -317,4 +292,7 @@ async function handleGenerateVideo() {
       </div>
     </div>
   </div>
+
+  <!-- Desktop History Sidebar -->
+  <CreateHistorySidebar v-model="showHistorySidebar" />
 </template>

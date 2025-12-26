@@ -42,7 +42,7 @@ function setBackground(background: SubtitleBackground) {
       >
         <span
           :class="[
-            'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform',
+            'absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform',
             draft.subtitleEnabled ? 'translate-x-7' : 'translate-x-1',
           ]"
         />

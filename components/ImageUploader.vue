@@ -340,6 +340,11 @@ function handleClearAvatar() {
 
 const hasSavedImages = computed(() => savedImages.value.length > 0)
 const isPortrait = computed(() => selectedRatio.value === 'portrait')
+
+// Expose openModal for parent components to directly open the modal
+defineExpose({
+  openModal: handleClick
+})
 </script>
 
 <template>

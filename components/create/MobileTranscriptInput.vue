@@ -12,8 +12,20 @@ const isGenerating = computed(() => transcriptGeneration.isGenerating.value)
 const showAIModal = ref(false)
 const aiTopic = ref('')
 
+// Textarea auto-resize
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function adjustTextareaHeight() {
+  const textarea = textareaRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  const maxHeight = 88 // 約四行高度 (22px * 4)
+  textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px'
+}
+
 function handleInput(value: string) {
   generationStore.updateDraft({ transcript: value })
+  nextTick(adjustTextareaHeight)
 }
 
 async function handleGenerateScript() {
@@ -37,26 +49,27 @@ async function handleGenerateScript() {
 
 <template>
   <div class="relative">
-    <input
+    <textarea
+      ref="textareaRef"
       :value="draft.transcript"
-      type="text"
-      placeholder="輸入逐字稿，或靈感用魔棒生成......"
-      class="w-full px-4 py-3 pr-20 bg-white border border-stone-200 rounded-xl text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-      @input="handleInput(($event.target as HTMLInputElement).value)"
+      rows="1"
+      placeholder="輸入逐字稿..."
+      class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none overflow-hidden"
+      @input="handleInput(($event.target as HTMLTextAreaElement).value)"
     />
-    <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+    <div class="absolute right-1.5 top-2 flex items-center gap-0.5">
       <button
-        class="p-2 text-stone-400 hover:text-stone-600 transition-colors"
+        class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
         title="語音輸入"
       >
-        <Mic class="w-5 h-5" />
+        <Mic class="w-4 h-4" />
       </button>
       <button
-        class="p-2 text-stone-400 hover:text-purple-600 transition-colors"
+        class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
         title="AI 生成"
         @click="showAIModal = true"
       >
-        <Sparkles class="w-5 h-5" />
+        <Sparkles class="w-4 h-4" />
       </button>
     </div>
 

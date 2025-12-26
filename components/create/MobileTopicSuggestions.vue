@@ -34,6 +34,9 @@ const currentPersonaId = ref<string | null>(null)
 
 const hasPersona = computed(() => !!props.personaContent?.trim() || !!analysisResult.value)
 
+// Track selected topic
+const selectedTopicId = ref<string | null>(null)
+
 // Platform labels
 const platformLabels: Record<MediaPlatform, string> = {
   youtube: 'YouTube',
@@ -152,6 +155,7 @@ async function handleRefreshTopics() {
 }
 
 async function handleSelectTopic(topic: SuggestedTopic) {
+  selectedTopicId.value = topic.id
   try {
     toastStore.info('正在生成腳本...')
     const transcript = await transcriptGeneration.generateTranscript(topic.title)
@@ -302,12 +306,12 @@ function parseAnalysisTitle(analysis: string): string | null {
 <template>
   <div>
     <!-- Header row -->
-    <div class="flex items-center justify-between mb-2">
-      <div class="flex items-center gap-2">
-        <svg class="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+    <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
           <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
         </svg>
-        <span class="text-sm font-medium text-stone-700">推薦主題</span>
+        <span class="text-xs font-medium text-stone-700">推薦主題</span>
       </div>
       <div class="flex items-center gap-2">
         <button
@@ -348,16 +352,19 @@ function parseAnalysisTitle(analysis: string): string | null {
       <span class="text-xs text-stone-500">生成中...</span>
     </div>
 
-    <div v-else class="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+    <div v-else class="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
       <button
         v-for="topic in topics"
         :key="topic.id"
-        class="flex-shrink-0 px-3 py-1.5 text-sm bg-white border border-stone-200 text-stone-700 rounded-full hover:bg-stone-50 transition-colors"
+        class="flex-shrink-0 px-2.5 py-1 text-xs rounded-full transition-colors"
+        :class="selectedTopicId === topic.id
+          ? 'bg-purple-100 border border-purple-400 text-purple-700'
+          : 'bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200'"
         @click="handleSelectTopic(topic)"
       >
         {{ topic.title }}
       </button>
-      <span v-if="!topics.length && !hasPersona" class="text-sm text-stone-400">
+      <span v-if="!topics.length && !hasPersona" class="text-xs text-stone-400">
         無（請先設定主題方向）
       </span>
     </div>

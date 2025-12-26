@@ -122,9 +122,15 @@ async function loadSavedVoices() {
 }
 
 function handleClick() {
+  openModal()
+}
+
+function openModal() {
   showModal.value = true
   modalTab.value = savedVoices.value.length > 0 ? 'history' : 'record'
 }
+
+defineExpose({ openModal })
 
 function handleCloseModal() {
   stopRecording()

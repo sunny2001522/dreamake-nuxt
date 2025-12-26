@@ -8,14 +8,15 @@ const aspectRatioClass = computed(() => {
 </script>
 
 <template>
-  <div class="relative w-full">
+  <div class="relative w-full h-full flex items-center justify-center">
     <!-- Preview container -->
     <div
       :class="[
-        'relative bg-stone-900 rounded-2xl overflow-hidden flex items-center justify-center mx-auto',
+        'relative bg-stone-900 rounded-2xl overflow-hidden flex items-center justify-center',
         aspectRatioClass,
-        // Mobile: constrain portrait height
-        draft.aspectRatio === 'portrait' ? 'max-h-[60vh] w-auto' : 'w-full',
+        // Mobile: adapt to flex parent container
+        'max-h-full max-w-full',
+        draft.aspectRatio === 'portrait' ? 'h-full w-auto' : 'w-full h-auto',
         // Desktop: fill available space
         'lg:h-full lg:max-h-none',
         draft.aspectRatio === 'portrait' ? 'lg:max-w-[calc((100vh-120px)*9/16)]' : 'lg:w-full',
@@ -53,8 +54,8 @@ const aspectRatioClass = computed(() => {
     </div>
 
     <!-- Ratio indicator (mobile only) -->
-    <p class="lg:hidden text-center text-xs text-stone-400 mt-2">
-      預覽模式 ({{ draft.aspectRatio === 'portrait' ? '9:16' : '16:9' }})
+    <p class="lg:hidden text-center text-[10px] text-stone-400 mt-1">
+      {{ draft.aspectRatio === 'portrait' ? '9:16' : '16:9' }}
     </p>
   </div>
 </template>
