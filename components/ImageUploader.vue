@@ -3,6 +3,7 @@ import type { SavedImage, AspectRatio } from '~/types'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const toastStore = useToastStore()
 const { draft } = storeToRefs(generationStore)
 
@@ -46,12 +47,61 @@ watch(() => authStore.user, (user) => {
   }
 })
 
+// Watch for preferences changes and apply default image
+watch(
+  () => preferencesStore.preferences?.image_id,
+  async (imageId) => {
+    // Only apply if we don't already have an avatar selected
+    if (imageId && !draft.value.avatarPreview) {
+      // Find the image in savedImages
+      const matchedImage = savedImages.value.find(img => img.supabaseId === imageId)
+      if (matchedImage) {
+        applyDefaultImage(matchedImage)
+        console.log('Applied default image from preferences:', matchedImage.name)
+      }
+    }
+  }
+)
+
+// Also check after savedImages are loaded
+watch(savedImages, (images) => {
+  const imageId = preferencesStore.preferences?.image_id
+  if (imageId && images.length > 0 && !draft.value.avatarPreview) {
+    const matchedImage = images.find(img => img.supabaseId === imageId)
+    if (matchedImage) {
+      applyDefaultImage(matchedImage)
+      console.log('Applied default image after loading:', matchedImage.name)
+    }
+  }
+})
+
+// Apply default image without closing modal
+function applyDefaultImage(image: SavedImage) {
+  const dataUrl = image.imageData.startsWith('data:') ? image.imageData : image.imageData
+  generationStore.setAvatar(image.id ?? null, dataUrl)
+}
+
 async function loadSavedImages() {
   if (!authStore.user) return
 
   try {
     isLoadingImages.value = true
-    savedImages.value = []
+    const { getAllImages } = useImageStorage()
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+
+    const dbImages = await getAllImages(userId)
+
+    savedImages.value = dbImages.map(img => ({
+      id: parseInt(img.id) || undefined,
+      supabaseId: img.id,
+      name: img.name,
+      imageData: img.image_url,
+      imageMimeType: img.image_mime_type,
+      thumbnailData: img.thumbnail_url || undefined,
+      createdAt: new Date(img.created_at),
+      lastUsedAt: new Date(img.last_used_at),
+      useCount: img.use_count,
+    }))
   } catch (err) {
     console.error('Failed to load saved images:', err)
   } finally {
@@ -143,10 +193,22 @@ async function handleUrlSubmit() {
   }
 }
 
-function handleSelectSavedImage(image: SavedImage) {
+async function handleSelectSavedImage(image: SavedImage) {
   const dataUrl = image.imageData.startsWith('data:') ? image.imageData : image.imageData
   generationStore.setAvatar(image.id ?? null, dataUrl)
   showModal.value = false
+
+  // Save to preferences
+  if (image.supabaseId && authStore.user) {
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    const { updateImagePreference } = usePreferencesStorage()
+    try {
+      await updateImagePreference(userId, image.supabaseId)
+      console.log('Image preference saved:', image.supabaseId)
+    } catch (err) {
+      console.error('Failed to save image preference:', err)
+    }
+  }
 }
 
 async function handleDeleteImage(event: Event, image: SavedImage) {

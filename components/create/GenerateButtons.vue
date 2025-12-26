@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { GenerationRecord } from '~/types'
+import type { GenerationRecord, AspectRatio, VideoModel } from '~/types'
+import { Smartphone, Monitor, ChevronDown } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -7,6 +8,26 @@ const toastStore = useToastStore()
 const router = useRouter()
 
 const { draft, isGenerating, stage } = storeToRefs(generationStore)
+
+// Aspect ratio options
+const aspectRatioOptions: { value: AspectRatio; label: string; icon: any }[] = [
+  { value: 'portrait', label: '9:16', icon: Smartphone },
+  { value: 'landscape', label: '16:9', icon: Monitor },
+]
+
+// Video model options
+const videoModelOptions: { value: VideoModel; label: string }[] = [
+  { value: 'vidnoz', label: '一般品質' },
+  { value: 'wavespeed', label: '高品質' },
+]
+
+function setAspectRatio(ratio: AspectRatio) {
+  generationStore.updateDraft({ aspectRatio: ratio })
+}
+
+function setVideoModel(model: VideoModel) {
+  generationStore.updateDraft({ videoModel: model })
+}
 
 // Generation composable
 const videoGeneration = useVideoGeneration()
@@ -111,6 +132,7 @@ async function handleGenerateVideo() {
       avatarUrl,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
+      waveSpeedPrompt: draft.value.waveSpeedPrompt,
     })
 
     // Poll for completion
@@ -174,6 +196,7 @@ async function handleContinueToVideo() {
       avatarUrl: draft.value.avatarPreview,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
+      waveSpeedPrompt: draft.value.waveSpeedPrompt,
     })
 
     // Poll for completion
@@ -203,6 +226,37 @@ async function handleContinueToVideo() {
 
 <template>
   <div class="card p-4 space-y-3">
+    <!-- Compact settings row -->
+    <div class="flex gap-2">
+      <!-- Aspect Ratio Dropdown -->
+      <div class="relative flex-1">
+        <select
+          :value="draft.aspectRatio"
+          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
+          @change="setAspectRatio(($event.target as HTMLSelectElement).value as AspectRatio)"
+        >
+          <option v-for="option in aspectRatioOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+      </div>
+
+      <!-- Video Model Dropdown -->
+      <div class="relative flex-1">
+        <select
+          :value="draft.videoModel"
+          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
+          @change="setVideoModel(($event.target as HTMLSelectElement).value as VideoModel)"
+        >
+          <option v-for="option in videoModelOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+      </div>
+    </div>
+
     <!-- Disabled reason hint -->
     <p
       v-if="disabledReason && !isGenerating"
@@ -230,38 +284,38 @@ async function handleContinueToVideo() {
     </template>
 
     <!-- Normal generation buttons -->
-    <template v-else>
+    <div v-else class="flex gap-2">
       <!-- Voice only button -->
       <button
-        class="w-full px-4 py-3 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        class="flex-1 px-3 py-2 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
         :disabled="!canGenerate"
         @click="handleGenerateVoiceOnly"
       >
-        <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+        <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
-        <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
         </svg>
-        僅生成語音
+        語音
       </button>
 
       <!-- Full video button -->
       <button
-        class="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        class="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
         :disabled="!canGenerate"
         @click="handleGenerateVideo"
       >
-        <svg v-if="isGenerating" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+        <svg v-if="isGenerating" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
-        <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
-        生成完整影片
+        影片
       </button>
-    </template>
+    </div>
   </div>
 </template>

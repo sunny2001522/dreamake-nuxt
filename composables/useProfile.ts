@@ -1,4 +1,4 @@
-import { useApi } from './useApi'
+import { useAuthStore } from '~/stores/auth'
 
 interface ProfileResponse {
   nickname: string
@@ -7,24 +7,27 @@ interface ProfileResponse {
 }
 
 export const useProfile = () => {
-  const PROFILE_DOMAIN = import.meta.env.VITE_PROFILE_SERVICE_DOMAIN
-
   const getProfile = async (): Promise<ProfileResponse | null> => {
-    const api = useApi()
+    const authStore = useAuthStore()
+    const accessToken = authStore.tokenInfo.access_token
 
-    const { data, error } = await api.post<ProfileResponse>(
-      `${PROFILE_DOMAIN}/graphql/query/member`,
-      {
-        fields: '{ nickname email image }',
-      }
-    )
-
-    if (error) {
-      console.error('Failed to get profile:', error)
+    if (!accessToken) {
+      console.error('No access token available')
       return null
     }
 
-    return data
+    try {
+      // Use local API proxy to avoid CORS issues
+      const response = await $fetch<ProfileResponse>('/api/profile/member', {
+        method: 'POST',
+        body: { accessToken },
+      })
+
+      return response
+    } catch (error) {
+      console.error('Failed to get profile:', error)
+      return null
+    }
   }
 
   return { getProfile }

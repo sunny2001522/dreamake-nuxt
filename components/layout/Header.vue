@@ -1,9 +1,17 @@
 <script setup lang="ts">
+import { User } from 'lucide-vue-next'
+import { onClickOutside } from '@vueuse/core'
+
 const { $manager } = useNuxtApp()
 const authStore = useAuthStore()
 const route = useRoute()
 
 const isMenuOpen = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
+
+onClickOutside(menuRef, () => {
+  isMenuOpen.value = false
+})
 
 const navLinks = [
   { name: '創作', path: '/create', requiresAuth: true },
@@ -12,6 +20,10 @@ const navLinks = [
 
 async function handleSignOut() {
   await authStore.logout($manager, '/')
+}
+
+async function handleLogin() {
+  await authStore.login($manager, '/create')
 }
 </script>
 
@@ -46,16 +58,12 @@ async function handleSignOut() {
         <div class="flex items-center gap-4">
           <template v-if="authStore.user">
             <!-- User Avatar -->
-            <div class="relative">
+            <div ref="menuRef" class="relative">
               <button
-                class="flex items-center gap-2 p-1 rounded-full hover:bg-stone-100 transition-colors"
+                class="flex items-center gap-2 p-2 rounded-full hover:bg-stone-100 transition-colors"
                 @click="isMenuOpen = !isMenuOpen"
               >
-                <img
-                  :src="authStore.authInfo.avatar || '/default-avatar.png'"
-                  :alt="authStore.authInfo.nickname || 'User'"
-                  class="w-8 h-8 rounded-full object-cover"
-                />
+                <User class="w-6 h-6 text-stone-600" />
               </button>
 
               <!-- Dropdown Menu -->
@@ -66,9 +74,9 @@ async function handleSignOut() {
                 >
                   <div class="px-4 py-2 border-b border-stone-100">
                     <p class="text-sm font-medium text-stone-800 truncate">
-                      {{ authStore.authInfo.nickname || authStore.authInfo.email }}
+                      {{ authStore.authInfo.nickname || '使用者' }}
                     </p>
-                    <p class="text-xs text-stone-500 truncate">
+                    <p v-if="authStore.authInfo.email" class="text-xs text-stone-500 truncate">
                       {{ authStore.authInfo.email }}
                     </p>
                   </div>
@@ -92,13 +100,13 @@ async function handleSignOut() {
             </div>
           </template>
           <template v-else>
-            <NuxtLink
-              to="/auth"
+            <button
               class="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors"
+              @click="handleLogin"
             >
               登入
-            </NuxtLink>
-            <CommonButton size="sm" @click="navigateTo('/auth')">
+            </button>
+            <CommonButton size="sm" @click="handleLogin">
               開始使用
             </CommonButton>
           </template>

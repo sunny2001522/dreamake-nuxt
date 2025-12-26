@@ -130,8 +130,8 @@ export const useAuthStore = defineStore('auth', () => {
     setAuthInfo({
       is_guest: false,
       sub: oidcUser.profile?.sub || '',
-      nickname: profileData?.nickname || '',
-      email: profileData?.email || '',
+      nickname: profileData?.nickname || oidcUser.profile?.nickname || '',
+      email: profileData?.email || oidcUser.profile?.email || '',
       avatar: profileData?.image || '',
     })
   }

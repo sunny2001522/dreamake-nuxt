@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown } from 'lucide-vue-next'
 import type { SubtitleFont, SubtitleBackground } from '~/types'
 
 const generationStore = useGenerationStore()
@@ -9,10 +10,10 @@ const fonts: { value: SubtitleFont; label: string }[] = [
   { value: 'ming', label: '明體' },
 ]
 
-const backgrounds: { value: SubtitleBackground; label: string; preview: string }[] = [
-  { value: 'none', label: '無背景', preview: 'bg-transparent' },
-  { value: 'black', label: '黑色', preview: 'bg-black' },
-  { value: 'white', label: '白色', preview: 'bg-white border border-stone-200' },
+const backgrounds: { value: SubtitleBackground; label: string }[] = [
+  { value: 'none', label: '無背景' },
+  { value: 'black', label: '黑色背景' },
+  { value: 'white', label: '白色背景' },
 ]
 
 function setSubtitleEnabled(enabled: boolean) {
@@ -30,7 +31,7 @@ function setBackground(background: SubtitleBackground) {
 
 <template>
   <div class="card p-4">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-3">
       <label class="text-sm font-medium text-stone-700">字幕設定</label>
       <button
         :class="[
@@ -48,46 +49,34 @@ function setBackground(background: SubtitleBackground) {
       </button>
     </div>
 
-    <template v-if="draft.subtitleEnabled">
-      <!-- Font Selection -->
-      <div class="mb-4">
-        <label class="block text-xs text-stone-500 mb-2">字型</label>
-        <div class="flex gap-2">
-          <button
-            v-for="font in fonts"
-            :key="font.value"
-            :class="[
-              'flex-1 px-3 py-2 text-sm rounded-lg border transition-colors',
-              draft.subtitleFont === font.value
-                ? 'border-purple-500 bg-purple-50 text-purple-600'
-                : 'border-stone-200 hover:border-stone-300 text-stone-600',
-            ]"
-            @click="setFont(font.value)"
-          >
+    <div v-if="draft.subtitleEnabled" class="flex gap-2">
+      <!-- Font Dropdown -->
+      <div class="relative flex-1">
+        <select
+          :value="draft.subtitleFont"
+          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
+          @change="setFont(($event.target as HTMLSelectElement).value as SubtitleFont)"
+        >
+          <option v-for="font in fonts" :key="font.value" :value="font.value">
             {{ font.label }}
-          </button>
-        </div>
+          </option>
+        </select>
+        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
       </div>
 
-      <!-- Background Selection -->
-      <div>
-        <label class="block text-xs text-stone-500 mb-2">背景</label>
-        <div class="flex gap-2">
-          <button
-            v-for="bg in backgrounds"
-            :key="bg.value"
-            :class="[
-              'flex-1 px-3 py-2 text-sm rounded-lg border transition-colors',
-              draft.subtitleBackground === bg.value
-                ? 'border-purple-500 bg-purple-50 text-purple-600'
-                : 'border-stone-200 hover:border-stone-300 text-stone-600',
-            ]"
-            @click="setBackground(bg.value)"
-          >
+      <!-- Background Dropdown -->
+      <div class="relative flex-1">
+        <select
+          :value="draft.subtitleBackground"
+          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
+          @change="setBackground(($event.target as HTMLSelectElement).value as SubtitleBackground)"
+        >
+          <option v-for="bg in backgrounds" :key="bg.value" :value="bg.value">
             {{ bg.label }}
-          </button>
-        </div>
+          </option>
+        </select>
+        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
       </div>
-    </template>
+    </div>
   </div>
 </template>

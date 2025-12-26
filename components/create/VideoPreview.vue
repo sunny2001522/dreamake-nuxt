@@ -8,18 +8,20 @@ const aspectRatioClass = computed(() => {
 </script>
 
 <template>
-  <div class="card p-4">
-    <div class="flex items-center justify-between mb-3">
-      <label class="text-sm font-medium text-stone-700">預覽</label>
-    </div>
-
+  <div class="relative w-full">
+    <!-- Preview container -->
     <div
       :class="[
-        'relative bg-stone-900 rounded-xl overflow-hidden flex items-center justify-center',
+        'relative bg-stone-900 rounded-2xl overflow-hidden flex items-center justify-center mx-auto',
         aspectRatioClass,
+        // Mobile: constrain portrait height
+        draft.aspectRatio === 'portrait' ? 'max-h-[60vh] w-auto' : 'w-full',
+        // Desktop: fill available space
+        'lg:h-full lg:max-h-none',
+        draft.aspectRatio === 'portrait' ? 'lg:max-w-[calc((100vh-120px)*9/16)]' : 'lg:w-full',
       ]"
     >
-      <!-- Video/Audio Player Placeholder -->
+      <!-- Video Player -->
       <template v-if="generatedResult?.videoUrl">
         <video
           :src="generatedResult.videoUrl"
@@ -27,13 +29,19 @@ const aspectRatioClass = computed(() => {
           class="w-full h-full object-contain"
         />
       </template>
+      <!-- Avatar Preview -->
       <template v-else-if="draft.avatarPreview">
         <img
           :src="draft.avatarPreview"
           alt="Avatar preview"
           class="w-full h-full object-cover"
         />
+        <!-- Subtitle preview overlay -->
+        <div class="absolute bottom-4 left-0 right-0 text-center">
+          <span class="px-3 py-1 text-white text-sm bg-black/50 rounded">字幕預覽效果</span>
+        </div>
       </template>
+      <!-- Empty state -->
       <template v-else>
         <div class="text-center text-stone-500">
           <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -43,5 +51,10 @@ const aspectRatioClass = computed(() => {
         </div>
       </template>
     </div>
+
+    <!-- Ratio indicator (mobile only) -->
+    <p class="lg:hidden text-center text-xs text-stone-400 mt-2">
+      預覽模式 ({{ draft.aspectRatio === 'portrait' ? '9:16' : '16:9' }})
+    </p>
   </div>
 </template>

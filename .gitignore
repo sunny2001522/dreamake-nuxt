@@ -49,3 +49,6 @@ coverage
 
 # TypeScript
 *.tsbuildinfo
+
+# Local SSL certificates
+certs/

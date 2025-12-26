@@ -17,13 +17,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/', '/auth']
+  const publicRoutes = ['/']
   if (publicRoutes.includes(to.path)) {
     return
   }
 
-  // Protect other routes - redirect to auth if not logged in
+  // Protect other routes - trigger CMoney login if not logged in
   if (authStore.isGuest) {
-    return navigateTo('/auth')
+    await authStore.login($manager, to.fullPath)
+    return
   }
 })

@@ -1,11 +1,24 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import fs from 'fs'
+import path from 'path'
+
+// Check if local SSL certificates exist
+const certsPath = path.resolve(__dirname, 'certs')
+const hasLocalCerts = fs.existsSync(path.join(certsPath, 'localhost.pem')) &&
+                      fs.existsSync(path.join(certsPath, 'localhost-key.pem'))
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
 
   devServer: {
     port: 3003,
-    https: true,
+    https: hasLocalCerts
+      ? {
+          key: fs.readFileSync(path.join(certsPath, 'localhost-key.pem'), 'utf-8'),
+          cert: fs.readFileSync(path.join(certsPath, 'localhost.pem'), 'utf-8'),
+        }
+      : true,
   },
 
   modules: [

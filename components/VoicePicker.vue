@@ -3,6 +3,7 @@ import type { SavedVoice } from '~/types'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const toastStore = useToastStore()
 const { draft } = storeToRefs(generationStore)
 
@@ -38,6 +39,10 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isCloning = ref(false)
 const cloningVoiceName = ref<string | null>(null)
 
+// Audio preview state
+const previewingVoiceId = ref<string | null>(null)
+const previewAudio = ref<HTMLAudioElement | null>(null)
+
 // Load saved voices on mount
 onMounted(() => {
   if (authStore.user) {
@@ -54,13 +59,61 @@ watch(() => authStore.user, (user) => {
   }
 })
 
+// Watch for preferences changes and apply default voice
+watch(
+  () => preferencesStore.preferences?.voice_id,
+  async (voiceId) => {
+    // Only apply if we don't already have a voice selected
+    if (voiceId && !draft.value.voicePreview) {
+      // Find the voice in savedVoices
+      const matchedVoice = savedVoices.value.find(v => v.supabaseId === voiceId)
+      if (matchedVoice) {
+        applyDefaultVoice(matchedVoice)
+        console.log('Applied default voice from preferences:', matchedVoice.name)
+      }
+    }
+  }
+)
+
+// Also check after savedVoices are loaded
+watch(savedVoices, (voices) => {
+  const voiceId = preferencesStore.preferences?.voice_id
+  if (voiceId && voices.length > 0 && !draft.value.voicePreview) {
+    const matchedVoice = voices.find(v => v.supabaseId === voiceId)
+    if (matchedVoice) {
+      applyDefaultVoice(matchedVoice)
+      console.log('Applied default voice after loading:', matchedVoice.name)
+    }
+  }
+})
+
+// Apply default voice without closing modal
+function applyDefaultVoice(voice: SavedVoice) {
+  generationStore.setVoice(voice)
+}
+
 async function loadSavedVoices() {
   if (!authStore.user) return
 
   try {
     isLoadingVoices.value = true
-    const response = await $fetch<{ voices: SavedVoice[] }>('/api/voice')
-    savedVoices.value = response.voices || []
+    const { getAllVoices } = useVoiceStorage()
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+
+    const dbVoices = await getAllVoices(userId)
+
+    savedVoices.value = dbVoices.map(voice => ({
+      id: parseInt(voice.id) || undefined,
+      supabaseId: voice.id,
+      name: voice.name,
+      speakerId: voice.speaker_id,
+      originalFileName: voice.original_file_name,
+      audioUrl: voice.audio_url || undefined,
+      audioMimeType: voice.audio_mime_type || undefined,
+      createdAt: new Date(voice.created_at),
+      lastUsedAt: new Date(voice.last_used_at),
+      useCount: voice.use_count,
+    }))
   } catch (err) {
     console.error('Failed to load saved voices:', err)
   } finally {
@@ -261,10 +314,22 @@ async function cloneVoice(file: File, name: string) {
   }
 }
 
-function handleSelectVoice(voice: SavedVoice) {
+async function handleSelectVoice(voice: SavedVoice) {
   generationStore.setVoice(voice)
   showModal.value = false
   toastStore.success(`已選擇語音: ${voice.name}`)
+
+  // Save to preferences
+  if (voice.supabaseId && authStore.user) {
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    const { updateVoicePreference } = usePreferencesStorage()
+    try {
+      await updateVoicePreference(userId, voice.supabaseId)
+      console.log('Voice preference saved:', voice.supabaseId)
+    } catch (err) {
+      console.error('Failed to save voice preference:', err)
+    }
+  }
 }
 
 async function handleDeleteVoice(event: Event, voice: SavedVoice) {
@@ -306,6 +371,57 @@ function formatDuration(seconds: number): string {
 
 const hasSavedVoices = computed(() => savedVoices.value.length > 0)
 const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DURATION) * 100)
+
+// Audio preview functions
+function handlePreviewVoice(event: Event, voice: SavedVoice) {
+  event.stopPropagation()
+
+  const voiceId = voice.supabaseId || String(voice.id)
+
+  // If already previewing this voice, stop it
+  if (previewingVoiceId.value === voiceId) {
+    stopPreview()
+    return
+  }
+
+  // Stop any current preview
+  stopPreview()
+
+  // Check if voice has audio URL
+  if (!voice.audioUrl) {
+    toastStore.warning('此語音無預覽音訊')
+    return
+  }
+
+  // Start new preview
+  previewingVoiceId.value = voiceId
+  previewAudio.value = new Audio(voice.audioUrl)
+  previewAudio.value.play()
+
+  previewAudio.value.onended = () => {
+    previewingVoiceId.value = null
+    previewAudio.value = null
+  }
+
+  previewAudio.value.onerror = () => {
+    toastStore.error('無法播放預覽')
+    previewingVoiceId.value = null
+    previewAudio.value = null
+  }
+}
+
+function stopPreview() {
+  if (previewAudio.value) {
+    previewAudio.value.pause()
+    previewAudio.value = null
+  }
+  previewingVoiceId.value = null
+}
+
+// Clean up on unmount
+onUnmounted(() => {
+  stopPreview()
+})
 </script>
 
 <template>
@@ -464,11 +580,33 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
                     : 'bg-stone-50 hover:bg-stone-100 border-2 border-transparent'"
                   @click="handleSelectVoice(voice)"
                 >
-                  <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  <!-- Preview play button -->
+                  <button
+                    class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                    :class="previewingVoiceId === (voice.supabaseId || String(voice.id))
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-purple-500 hover:bg-purple-600'"
+                    @click="handlePreviewVoice($event, voice)"
+                  >
+                    <!-- Stop icon when playing -->
+                    <svg
+                      v-if="previewingVoiceId === (voice.supabaseId || String(voice.id))"
+                      class="w-4 h-4 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <rect x="6" y="6" width="12" height="12" rx="1" />
                     </svg>
-                  </div>
+                    <!-- Play triangle icon -->
+                    <svg
+                      v-else
+                      class="w-4 h-4 text-white ml-0.5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </button>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-stone-800 truncate">{{ voice.name }}</p>
                     <p class="text-xs text-stone-500">{{ voice.originalFileName }}</p>

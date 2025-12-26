@@ -22,6 +22,7 @@ interface GenerationDraft {
   subtitleFont: SubtitleFont
   subtitleBackground: SubtitleBackground
   videoModel: VideoModel
+  waveSpeedPrompt: string
 }
 
 const DEFAULT_DRAFT: GenerationDraft = {
@@ -37,6 +38,7 @@ const DEFAULT_DRAFT: GenerationDraft = {
   subtitleFont: 'gothic',
   subtitleBackground: 'black',
   videoModel: 'vidnoz',
+  waveSpeedPrompt: '對著鏡頭講話，侃侃而談，搭配手部動作，輕鬆而自然',
 }
 
 export const useGenerationStore = defineStore('generation', () => {
