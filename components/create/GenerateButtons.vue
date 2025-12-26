@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GenerationRecord, AspectRatio, VideoModel } from '~/types'
-import { Smartphone, Monitor, ChevronDown } from 'lucide-vue-next'
+import { Smartphone, Monitor } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -228,32 +228,35 @@ async function handleContinueToVideo() {
   <div class="card p-4 space-y-3">
     <!-- Compact settings row -->
     <div class="flex gap-2">
-      <!-- Aspect Ratio Dropdown -->
-      <div class="relative flex-1">
-        <select
-          :value="draft.aspectRatio"
-          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
-          @change="setAspectRatio(($event.target as HTMLSelectElement).value as AspectRatio)"
+      <!-- Aspect Ratio Toggle -->
+      <div class="flex-1 flex bg-stone-100 rounded-lg p-0.5">
+        <button
+          v-for="option in aspectRatioOptions"
+          :key="option.value"
+          class="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-sm rounded-md transition-all"
+          :class="draft.aspectRatio === option.value
+            ? 'bg-white text-stone-800 shadow-sm'
+            : 'text-stone-500 hover:text-stone-700'"
+          @click="setAspectRatio(option.value)"
         >
-          <option v-for="option in aspectRatioOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+          <component :is="option.icon" class="w-3.5 h-3.5" />
+          <span>{{ option.label }}</span>
+        </button>
       </div>
 
-      <!-- Video Model Dropdown -->
-      <div class="relative flex-1">
-        <select
-          :value="draft.videoModel"
-          class="w-full appearance-none bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 pl-3 pr-8 cursor-pointer hover:border-stone-300 focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500"
-          @change="setVideoModel(($event.target as HTMLSelectElement).value as VideoModel)"
+      <!-- Video Model Toggle -->
+      <div class="flex-1 flex bg-stone-100 rounded-lg p-0.5">
+        <button
+          v-for="option in videoModelOptions"
+          :key="option.value"
+          class="flex-1 py-1.5 px-2 text-sm rounded-md transition-all"
+          :class="draft.videoModel === option.value
+            ? 'bg-white text-stone-800 shadow-sm'
+            : 'text-stone-500 hover:text-stone-700'"
+          @click="setVideoModel(option.value)"
         >
-          <option v-for="option in videoModelOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-        <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+          {{ option.label }}
+        </button>
       </div>
     </div>
 

@@ -7,6 +7,7 @@ const { draft } = storeToRefs(generationStore)
 
 const transcriptGeneration = useTranscriptGeneration()
 const isGenerating = computed(() => transcriptGeneration.isGenerating.value)
+const isGeneratingTitle = ref(false)
 
 // AI generation modal
 const showAIModal = ref(false)
@@ -45,32 +46,98 @@ async function handleGenerateScript() {
     toastStore.error('生成失敗', err.message || '請稍後再試')
   }
 }
+
+function handleTitleInput(value: string) {
+  generationStore.updateDraft({ title: value })
+}
+
+function handleMicClick() {
+  toastStore.info('語音輸入功能開發中')
+}
+
+async function handleGenerateTitle() {
+  if (!draft.value.transcript.trim()) {
+    toastStore.warning('請先輸入腳本內容')
+    return
+  }
+
+  try {
+    isGeneratingTitle.value = true
+    const title = await transcriptGeneration.generateTitle(draft.value.transcript)
+    generationStore.updateDraft({ title })
+    toastStore.success('標題生成完成！')
+  } catch (err: any) {
+    console.error('Failed to generate title:', err)
+    toastStore.error('標題生成失敗', err.message || '請稍後再試')
+  } finally {
+    isGeneratingTitle.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="relative">
-    <textarea
-      ref="textareaRef"
-      :value="draft.transcript"
-      rows="1"
-      placeholder="輸入逐字稿..."
-      class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none overflow-hidden"
-      @input="handleInput(($event.target as HTMLTextAreaElement).value)"
-    />
-    <div class="absolute right-1.5 top-2 flex items-center gap-0.5">
-      <button
-        class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
-        title="語音輸入"
-      >
-        <Mic class="w-4 h-4" />
-      </button>
-      <button
-        class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
-        title="AI 生成"
-        @click="showAIModal = true"
-      >
-        <Sparkles class="w-4 h-4" />
-      </button>
+  <div class="space-y-2">
+    <!-- Section label -->
+   
+
+    <!-- Title input with mic and AI buttons -->
+    <div class="relative">
+      <input
+        :value="draft.title"
+        type="text"
+        placeholder="輸入標題..."
+        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        @input="handleTitleInput(($event.target as HTMLInputElement).value)"
+      />
+      <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+        <button
+          class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
+          title="語音輸入"
+          @click="handleMicClick"
+        >
+          <Mic class="w-4 h-4" />
+        </button>
+        <button
+          class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
+          title="AI 生成標題"
+          :disabled="isGeneratingTitle"
+          @click="handleGenerateTitle"
+        >
+          <svg v-if="isGeneratingTitle" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <Sparkles v-else class="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Transcript textarea with mic and AI buttons -->
+    <div class="relative">
+      <textarea
+        ref="textareaRef"
+        :value="draft.transcript"
+        rows="1"
+        placeholder="輸入逐字稿..."
+        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none overflow-hidden"
+        @input="handleInput(($event.target as HTMLTextAreaElement).value)"
+      />
+      <div class="absolute right-1.5 top-2 flex items-center gap-0.5">
+        <button
+          class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
+          title="語音輸入"
+          @click="handleMicClick"
+        >
+          <Mic class="w-4 h-4" />
+        </button>
+        <button
+          class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
+          title="AI 生成"
+          @click="showAIModal = true"
+        >
+          <Sparkles class="w-4 h-4" />
+        </button>
+      </div>
     </div>
 
     <!-- AI Generation Modal -->

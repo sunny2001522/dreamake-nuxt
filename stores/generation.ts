@@ -21,6 +21,8 @@ interface GenerationDraft {
   subtitleEnabled: boolean
   subtitleFont: SubtitleFont
   subtitleBackground: SubtitleBackground
+  titleY: number // 標題 Y 位置 (百分比 0-100，從頂部)
+  subtitleY: number // 字幕 Y 位置 (百分比 0-100，從頂部)
   videoModel: VideoModel
   waveSpeedPrompt: string
 }
@@ -37,6 +39,8 @@ const DEFAULT_DRAFT: GenerationDraft = {
   subtitleEnabled: true,
   subtitleFont: 'gothic',
   subtitleBackground: 'black',
+  titleY: 8, // 預設 8% 從頂部
+  subtitleY: 66, // 預設 66% (約 2/3 處)
   videoModel: 'vidnoz',
   waveSpeedPrompt: '對著鏡頭講話，侃侃而談，搭配手部動作，輕鬆而自然',
 }

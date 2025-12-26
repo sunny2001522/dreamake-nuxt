@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SuggestedTopic, MediaPlatform, DbPersona } from '~/types'
+import { Mic, Sparkles } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -45,6 +46,9 @@ const analysisPlatform = ref<MediaPlatform | null>(null)
 const topics = computed(() => transcriptGeneration.suggestedTopics.value)
 const isLoadingTopics = computed(() => transcriptGeneration.isLoadingTopics.value)
 const hasPersona = computed(() => !!props.personaContent?.trim() || !!analysisResult.value)
+
+// Track selected topic
+const selectedTopicId = ref<string | null>(null)
 
 // Platform labels
 const platformLabels: Record<MediaPlatform, string> = {
@@ -204,6 +208,7 @@ async function handleRefreshTopics() {
 }
 
 async function handleSelectTopic(topic: SuggestedTopic) {
+  selectedTopicId.value = topic.id
   try {
     toastStore.info('正在生成腳本...')
     const transcript = await transcriptGeneration.generateTranscript(topic.title)
@@ -377,6 +382,48 @@ function closeAIModal() {
   showAIModal.value = false
   aiTopic.value = ''
 }
+
+function handleTitleInput(value: string) {
+  generationStore.updateDraft({ title: value })
+}
+
+// Speech recognition for title
+const titleSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ title: draft.value.title + text })
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
+
+// Speech recognition for transcript
+const transcriptSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ transcript: draft.value.transcript + text })
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
+
+function handleTitleMicClick() {
+  if (titleSpeech.isListening.value) {
+    titleSpeech.stopListening()
+  } else {
+    titleSpeech.startListening()
+  }
+}
+
+function handleTranscriptMicClick() {
+  if (transcriptSpeech.isListening.value) {
+    transcriptSpeech.stopListening()
+  } else {
+    transcriptSpeech.startListening()
+  }
+}
 </script>
 
 <template>
@@ -444,27 +491,83 @@ function closeAIModal() {
       <span class="text-xs text-stone-500">生成中...</span>
     </div>
 
-    <div v-else-if="topics.length > 0" class="flex flex-wrap gap-1.5 mb-2">
+    <div v-else-if="topics.length > 0" class="flex gap-1.5 mb-2 overflow-x-auto scrollbar-hide">
       <button
         v-for="topic in topics"
         :key="topic.id"
-        class="px-2 py-1 text-xs bg-purple-50 text-purple-700 rounded-full hover:bg-purple-100 transition-colors"
+        class="flex-shrink-0 px-2 py-1 text-xs rounded-full transition-colors"
+        :class="selectedTopicId === topic.id
+          ? 'bg-purple-100 text-purple-700'
+          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'"
         @click="handleSelectTopic(topic)"
       >
         {{ topic.title }}
       </button>
-      <span v-if="hasPersona" class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-        已設定
-      </span>
     </div>
 
-    <!-- Transcript textarea (smaller height) -->
-    <textarea
-      :value="draft.transcript"
-      placeholder="輸入影片主題或逐字稿"
-      class="w-full h-20 p-3 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl resize-none focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-      @input="handleInput(($event.target as HTMLTextAreaElement).value)"
-    />
+    <!-- Section label -->
+   
+
+    <!-- Title input with mic and AI buttons -->
+    <div class="relative mb-2">
+      <input
+        :value="draft.title"
+        type="text"
+        placeholder="輸入標題..."
+        class="w-full px-3 py-2 pr-16 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        @input="handleTitleInput(($event.target as HTMLInputElement).value)"
+      />
+      <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        <button
+          class="p-1.5 transition-colors"
+          :class="titleSpeech.isListening.value
+            ? 'text-red-500 animate-pulse'
+            : 'text-stone-400 hover:text-stone-600'"
+          :title="titleSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTitleMicClick"
+        >
+          <Mic class="w-4 h-4" />
+        </button>
+        <button
+          class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
+          title="AI 生成標題"
+          @click="handleGenerateTitle"
+        >
+          <Sparkles class="w-3.5 h-3.5" />
+          生成
+        </button>
+      </div>
+    </div>
+
+    <!-- Transcript textarea with mic and AI buttons -->
+    <div class="relative">
+      <textarea
+        :value="draft.transcript"
+        placeholder="輸入逐字稿..."
+        class="w-full h-20 p-3 pr-24 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl resize-none focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        @input="handleInput(($event.target as HTMLTextAreaElement).value)"
+      />
+      <div class="absolute right-2 top-3 flex items-center gap-1">
+        <button
+          class="p-1.5 transition-colors"
+          :class="transcriptSpeech.isListening.value
+            ? 'text-red-500 animate-pulse'
+            : 'text-stone-400 hover:text-stone-600'"
+          :title="transcriptSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTranscriptMicClick"
+        >
+          <Mic class="w-4 h-4" />
+        </button>
+        <button
+          class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
+          title="AI 生成腳本"
+          @click="openAIModal"
+        >
+          <Sparkles class="w-3.5 h-3.5" />
+          生成
+        </button>
+      </div>
+    </div>
 
     <!-- Persona Modal -->
     <Teleport to="body">
@@ -688,3 +791,13 @@ function closeAIModal() {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>

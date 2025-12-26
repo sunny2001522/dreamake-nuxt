@@ -241,9 +241,8 @@ onMounted(loadVideos)
     </div>
 
     <!-- Sub Header with actions -->
-    <div class="bg-white border-b border-stone-200 px-4 py-3 shrink-0">
-      <div class="max-w-6xl mx-auto flex items-center justify-between">
-        <h1 class="text-lg font-bold text-stone-800">我的影片</h1>
+    <div class=" px-4 py-3 shrink-0">
+      <div class="max-w-6xl mx-auto flex items-center justify-end">
         <div class="flex items-center gap-2">
           <template v-if="isSelectMode">
             <button
@@ -313,15 +312,13 @@ onMounted(loadVideos)
       </button>
     </div>
 
-    <!-- History List by Date -->
+    <!-- History List -->
     <div v-else class="flex-1 overflow-y-auto p-4 pb-8">
-      <div class="space-y-6 max-w-6xl mx-auto">
-        <div v-for="(items, date) in groupedHistory" :key="date">
-          <h2 class="text-sm font-bold text-stone-500 mb-3 py-2">{{ date }}</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            <div
-              v-for="item in items"
-              :key="item.id"
+      <div class="max-w-6xl mx-auto">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div
+            v-for="item in videos"
+            :key="item.id"
               class="relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all"
               :class="selectedItems.has(item.id)
                 ? 'border-stone-800 ring-2 ring-stone-400/30'
@@ -449,7 +446,6 @@ onMounted(loadVideos)
                   </span>
                 </div>
               </div>
-            </div>
           </div>
         </div>
       </div>

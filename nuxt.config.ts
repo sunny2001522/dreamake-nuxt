@@ -41,6 +41,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     // Server-side only
+    adminEmails: process.env.ADMIN_EMAILS || '',
     topMediaiApiKey: process.env.TOPMEDIAI_API_KEY || '',
     vidnozApiKey: process.env.VIDNOZ_API_KEY || '',
     wavespeedApiKey: process.env.WAVESPEED_API_KEY || '',
@@ -69,6 +70,7 @@ export default defineNuxtConfig({
     '/login': { ssr: false },  // OIDC callback needs client-side only
     '/logout': { ssr: false }, // OIDC callback needs client-side only
     '/refresh': { ssr: false }, // OIDC callback needs client-side only
+    '/admin': { ssr: false },  // Admin dashboard needs client-side only
   },
 
   nitro: {

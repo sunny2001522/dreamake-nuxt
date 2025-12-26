@@ -5,6 +5,60 @@ const { draft, generatedResult } = storeToRefs(generationStore)
 const aspectRatioClass = computed(() => {
   return draft.value.aspectRatio === 'portrait' ? 'aspect-[9/16]' : 'aspect-video'
 })
+
+// 標題拖曳
+const titleDrag = useVerticalDrag({
+  initialY: draft.value.titleY,
+  minY: 5,
+  maxY: 50,
+})
+
+// 字幕拖曳
+const subtitleDrag = useVerticalDrag({
+  initialY: draft.value.subtitleY,
+  minY: 50,
+  maxY: 95,
+})
+
+// 同步拖曳位置到 store
+watch(
+  () => titleDrag.y.value,
+  (newY) => {
+    generationStore.updateDraft({ titleY: newY })
+  }
+)
+
+watch(
+  () => subtitleDrag.y.value,
+  (newY) => {
+    generationStore.updateDraft({ subtitleY: newY })
+  }
+)
+
+// 字體樣式對應
+const fontClass = computed(() => {
+  return draft.value.subtitleFont === 'ming' ? 'font-serif' : 'font-sans'
+})
+
+// 標題背景樣式
+const titleBackgroundClass = computed(() => {
+  switch (draft.value.subtitleBackground) {
+    case 'black':
+      return 'bg-black/70 px-3 py-1 rounded'
+    case 'white':
+      return 'bg-white/70 px-3 py-1 rounded text-black'
+    default:
+      return ''
+  }
+})
+
+// 標題文字樣式
+const titleTextClass = computed(() => {
+  if (draft.value.subtitleBackground === 'white') {
+    return 'text-black'
+  }
+  return 'text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]'
+})
 </script>
 
 <template>
@@ -17,9 +71,8 @@ const aspectRatioClass = computed(() => {
         // Mobile: adapt to flex parent container
         'max-h-full max-w-full',
         draft.aspectRatio === 'portrait' ? 'h-full w-auto' : 'w-full h-auto',
-        // Desktop: fill available space
-        'lg:h-full lg:max-h-none',
-        draft.aspectRatio === 'portrait' ? 'lg:max-w-[calc((100vh-120px)*9/16)]' : 'lg:w-full',
+        // Desktop: portrait fills height, landscape fills width only
+        draft.aspectRatio === 'portrait' ? 'lg:h-full lg:max-h-none lg:max-w-[calc((100vh-120px)*9/16)]' : 'lg:w-full',
       ]"
     >
       <!-- Video Player -->
@@ -37,9 +90,66 @@ const aspectRatioClass = computed(() => {
           alt="Avatar preview"
           class="w-full h-full object-cover"
         />
-        <!-- Subtitle preview overlay -->
-        <div class="absolute bottom-4 left-0 right-0 text-center">
-          <span class="px-3 py-1 text-white text-sm bg-black/50 rounded">字幕預覽效果</span>
+
+        <!-- Title Overlay - Draggable -->
+        <div
+          v-if="draft.subtitleEnabled && draft.title"
+          :class="[
+            'absolute inset-x-0 px-3 flex justify-center z-10 select-none transition-transform',
+            titleDrag.isDragging.value
+              ? 'cursor-grabbing ring-2 ring-white/50 ring-offset-2 ring-offset-transparent rounded-lg scale-[1.02]'
+              : 'cursor-grab hover:ring-2 hover:ring-white/30 hover:ring-offset-1 hover:ring-offset-transparent rounded-lg',
+          ]"
+          :style="{
+            top: `${titleDrag.y.value}%`,
+            transform: 'translateY(-50%)',
+            ...titleDrag.handlers.style,
+          }"
+          @pointerdown="titleDrag.handlers.onPointerDown"
+          @pointermove="titleDrag.handlers.onPointerMove"
+          @pointerup="titleDrag.handlers.onPointerUp"
+          @pointercancel="titleDrag.handlers.onPointerCancel"
+        >
+          <p
+            :class="[
+              'text-center whitespace-pre-line text-sm font-bold',
+              fontClass,
+              titleBackgroundClass,
+              titleTextClass,
+            ]"
+          >
+            {{ draft.title }}
+          </p>
+        </div>
+
+        <!-- Subtitle Overlay - Draggable -->
+        <div
+          v-if="draft.subtitleEnabled"
+          :class="[
+            'absolute inset-x-0 px-4 flex justify-center select-none transition-transform',
+            subtitleDrag.isDragging.value
+              ? 'cursor-grabbing ring-2 ring-white/50 ring-offset-2 ring-offset-transparent rounded-lg scale-[1.02]'
+              : 'cursor-grab hover:ring-2 hover:ring-white/30 hover:ring-offset-1 hover:ring-offset-transparent rounded-lg',
+          ]"
+          :style="{
+            top: `${subtitleDrag.y.value}%`,
+            transform: 'translateY(-50%)',
+            ...subtitleDrag.handlers.style,
+          }"
+          @pointerdown="subtitleDrag.handlers.onPointerDown"
+          @pointermove="subtitleDrag.handlers.onPointerMove"
+          @pointerup="subtitleDrag.handlers.onPointerUp"
+          @pointercancel="subtitleDrag.handlers.onPointerCancel"
+        >
+          <span
+            :class="[
+              'text-center text-sm leading-relaxed text-white',
+              fontClass,
+              'drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]',
+            ]"
+          >
+            字幕預覽效果
+          </span>
         </div>
       </template>
       <!-- Empty state -->
