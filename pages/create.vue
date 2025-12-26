@@ -63,10 +63,110 @@ onMounted(async () => {
       }
     }
   }
+
+  // Check for history item to load from sessionStorage
+  const loadHistoryItem = sessionStorage.getItem('loadHistoryItem')
+  const triggerRegenerate = sessionStorage.getItem('triggerRegenerate')
+
+  if (loadHistoryItem) {
+    try {
+      const item = JSON.parse(loadHistoryItem) as GenerationRecord
+
+      // Load history item into store
+      generationStore.loadFromHistory(item)
+
+      // Clear sessionStorage
+      sessionStorage.removeItem('loadHistoryItem')
+
+      // If regenerate flag is set, trigger generation
+      if (triggerRegenerate === 'true') {
+        sessionStorage.removeItem('triggerRegenerate')
+        // Use nextTick to ensure UI is updated before triggering
+        await nextTick()
+        handleGenerateVideo()
+      }
+    } catch (err) {
+      console.error('Failed to load history item:', err)
+    }
+  }
 })
 
 // Generation handlers for mobile toolbar
 const videoGeneration = useVideoGeneration()
+
+// Subtitle generation helper
+async function generateSubtitles(audioUrl: string, transcript: string) {
+  if (!draft.value.subtitleEnabled) return
+
+  try {
+    generationStore.setLoadingSubtitles(true)
+
+    // Fetch audio as blob
+    const audioResponse = await fetch(audioUrl)
+    const audioBlob = await audioResponse.blob()
+
+    // Create form data
+    const formData = new FormData()
+    formData.append('audio', audioBlob, 'audio.mp3')
+    formData.append('transcript', transcript)
+
+    // Call subtitle generation API
+    const response = await $fetch('/api/subtitle', {
+      method: 'POST',
+      body: formData,
+    })
+
+    const result = response as {
+      segments: Array<{ text: string; startTime: number; endTime: number }>
+      hasTimestamps: boolean
+      source: string
+    }
+
+    generationStore.setSubtitleSegments(result.segments, result.hasTimestamps)
+    console.log('Subtitles generated:', {
+      count: result.segments.length,
+      hasTimestamps: result.hasTimestamps,
+      source: result.source,
+    })
+  } catch (err) {
+    console.error('Failed to generate subtitles:', err)
+    // Fallback: generate simple text segments
+    const segments = simpleTextSegmentation(transcript)
+    generationStore.setSubtitleSegments(segments, false)
+  } finally {
+    generationStore.setLoadingSubtitles(false)
+  }
+}
+
+// Simple text segmentation fallback
+function simpleTextSegmentation(transcript: string) {
+  const cleanText = transcript.replace(/[，。！？、；：""''（）【】《》\s]+/g, '').trim()
+  if (!cleanText) return []
+
+  const segments: Array<{ text: string; startTime: number; endTime: number }> = []
+  const minChars = 6
+  const maxChars = 10
+
+  let i = 0
+  while (i < cleanText.length) {
+    const remainingChars = cleanText.length - i
+    let segmentLength = Math.min(maxChars, remainingChars)
+
+    if (remainingChars <= maxChars) {
+      segmentLength = remainingChars
+    } else if (remainingChars - maxChars < minChars) {
+      segmentLength = Math.ceil(remainingChars / 2)
+    }
+
+    segments.push({
+      text: cleanText.slice(i, i + segmentLength),
+      startTime: -1,
+      endTime: -1,
+    })
+    i += segmentLength
+  }
+  return segments
+}
 
 async function handleGenerateVoice() {
   if (!draft.value.transcript.trim() || !draft.value.avatarPreview || !draft.value.voicePreview?.speakerId) {
@@ -81,11 +181,18 @@ async function handleGenerateVoice() {
   }
 
   try {
+    generationStore.resetGeneration()
     generationStore.setStage('voice')
     generationStore.setError(null)
 
     const speakerId = draft.value.voicePreview!.speakerId!
     const result = await videoGeneration.generateVoice(speakerId, draft.value.transcript)
+
+    // Generate subtitles from audio
+    if (draft.value.subtitleEnabled) {
+      generationStore.setStage('subtitle')
+      await generateSubtitles(result.audioUrl, draft.value.transcript)
+    }
 
     const record: GenerationRecord = {
       id: Date.now().toString(),
@@ -106,7 +213,7 @@ async function handleGenerateVoice() {
   } catch (err: any) {
     console.error('Voice generation failed:', err)
     generationStore.setError(err.message || '語音生成失敗')
-    generationStore.setStage('idle')
+    generationStore.setStage('error')
     toastStore.error('語音生成失敗', err.message)
   }
 }
@@ -138,6 +245,12 @@ async function handleGenerateVideo() {
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
     })
+
+    // Generate subtitles in parallel with video generation
+    if (draft.value.subtitleEnabled) {
+      generationStore.setStage('subtitle')
+      await generateSubtitles(result.audioUrl, draft.value.transcript)
+    }
 
     generationStore.setStage('video')
     const videoResult = await videoGeneration.pollUntilComplete(
