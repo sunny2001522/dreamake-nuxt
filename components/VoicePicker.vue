@@ -382,24 +382,21 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
 function handlePreviewVoice(event: Event, voice: SavedVoice) {
   event.stopPropagation()
 
+  // 沒有 audioUrl 直接返回（按鈕已禁用）
+  if (!voice.audioUrl) return
+
   const voiceId = voice.supabaseId || String(voice.id)
 
-  // If already previewing this voice, stop it
+  // 如果正在播放此語音，停止它
   if (previewingVoiceId.value === voiceId) {
     stopPreview()
     return
   }
 
-  // Stop any current preview
+  // 停止當前預覽
   stopPreview()
 
-  // Check if voice has audio URL
-  if (!voice.audioUrl) {
-    toastStore.warning('此語音無預覽音訊')
-    return
-  }
-
-  // Start new preview
+  // 開始新預覽
   previewingVoiceId.value = voiceId
   previewAudio.value = new Audio(voice.audioUrl)
   previewAudio.value.play()
@@ -410,7 +407,7 @@ function handlePreviewVoice(event: Event, voice: SavedVoice) {
   }
 
   previewAudio.value.onerror = () => {
-    toastStore.error('無法播放預覽')
+    // 靜默處理錯誤
     previewingVoiceId.value = null
     previewAudio.value = null
   }
@@ -589,24 +586,44 @@ onUnmounted(() => {
                   <!-- Preview play button -->
                   <button
                     class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                    :class="previewingVoiceId === (voice.supabaseId || String(voice.id))
-                      ? 'bg-purple-600 hover:bg-purple-700'
-                      : 'bg-purple-500 hover:bg-purple-600'"
-                    @click="handlePreviewVoice($event, voice)"
+                    :class="[
+                      !voice.audioUrl
+                        ? 'bg-stone-300 cursor-not-allowed'
+                        : previewingVoiceId === (voice.supabaseId || String(voice.id))
+                          ? 'bg-purple-600 hover:bg-purple-700'
+                          : 'bg-purple-500 hover:bg-purple-600'
+                    ]"
+                    :disabled="!voice.audioUrl"
+                    @click="voice.audioUrl && handlePreviewVoice($event, voice)"
                   >
-                    <!-- Stop icon when playing -->
-                    <svg
+                    <!-- 音波動畫 - 播放中 -->
+                    <div
                       v-if="previewingVoiceId === (voice.supabaseId || String(voice.id))"
-                      class="w-4 h-4 text-white"
+                      class="flex items-center justify-center gap-0.5 w-4 h-4"
+                    >
+                      <div
+                        v-for="i in 4"
+                        :key="i"
+                        class="w-0.5 bg-white rounded-full animate-audio-wave"
+                        :style="{
+                          height: `${8 + Math.sin((i - 1) * 0.8) * 4}px`,
+                          animationDelay: `${(i - 1) * 100}ms`
+                        }"
+                      />
+                    </div>
+                    <!-- Play triangle icon - 有音訊時 -->
+                    <svg
+                      v-else-if="voice.audioUrl"
+                      class="w-4 h-4 text-white ml-0.5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
-                      <rect x="6" y="6" width="12" height="12" rx="1" />
+                      <path d="M8 5v14l11-7z" />
                     </svg>
-                    <!-- Play triangle icon -->
+                    <!-- Disabled icon - 無音訊 -->
                     <svg
                       v-else
-                      class="w-4 h-4 text-white ml-0.5"
+                      class="w-4 h-4 text-stone-500"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -748,3 +765,18 @@ onUnmounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@keyframes audio-wave {
+  0%, 100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-audio-wave {
+  animation: audio-wave 0.4s ease-in-out infinite;
+}
+</style>
