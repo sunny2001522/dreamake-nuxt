@@ -53,14 +53,16 @@ export default defineNuxtConfig({
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 
     // Client-side (public)
+    // Note: These can be overridden at runtime with NUXT_PUBLIC_* environment variables
+    // e.g., NUXT_PUBLIC_BASE_DOMAIN will override baseDomain
     public: {
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       // CMoney OIDC
-      baseDomain: process.env.VITE_BASE_DOMAIN || '',
-      oidcDomain: process.env.VITE_OIDC_DOMAIN || '',
-      identityServiceDomain: process.env.VITE_IDENTITY_SERVICE_DOMAIN || '',
-      profileServiceDomain: process.env.VITE_PROFILE_SERVICE_DOMAIN || '',
+      baseDomain: process.env.VITE_BASE_DOMAIN || process.env.NUXT_PUBLIC_BASE_DOMAIN || '',
+      oidcDomain: process.env.VITE_OIDC_DOMAIN || process.env.NUXT_PUBLIC_OIDC_DOMAIN || '',
+      identityServiceDomain: process.env.VITE_IDENTITY_SERVICE_DOMAIN || process.env.NUXT_PUBLIC_IDENTITY_SERVICE_DOMAIN || '',
+      profileServiceDomain: process.env.VITE_PROFILE_SERVICE_DOMAIN || process.env.NUXT_PUBLIC_PROFILE_SERVICE_DOMAIN || '',
     },
   },
 
