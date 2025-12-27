@@ -16,21 +16,21 @@ const currentStageIndex = computed(() => {
 </script>
 
 <template>
-  <div v-if="isGenerating" class="card p-4">
-    <div class="flex items-center gap-2 mb-4">
-      <div class="animate-spin w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full" />
-      <span class="text-sm font-medium text-stone-700">生成中...</span>
+  <div v-if="isGenerating" class="card p-3">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="animate-spin w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full" />
+      <span class="text-xs font-medium text-stone-700">生成中...</span>
     </div>
 
-    <div class="space-y-3">
+    <div class="space-y-2">
       <div
         v-for="(s, index) in stages"
         :key="s.key"
-        class="flex items-center gap-3"
+        class="flex items-center gap-2"
       >
         <div
           :class="[
-            'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
+            'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium',
             index < currentStageIndex
               ? 'bg-green-500 text-white'
               : index === currentStageIndex
@@ -43,7 +43,7 @@ const currentStageIndex = computed(() => {
         </div>
         <span
           :class="[
-            'text-sm',
+            'text-xs',
             index <= currentStageIndex ? 'text-stone-800' : 'text-stone-400',
           ]"
         >
@@ -51,7 +51,7 @@ const currentStageIndex = computed(() => {
         </span>
         <span
           v-if="stepDurations[s.key]"
-          class="text-xs text-stone-400 ml-auto"
+          class="text-[10px] text-stone-400 ml-auto"
         >
           {{ stepDurations[s.key].toFixed(1) }}s
         </span>

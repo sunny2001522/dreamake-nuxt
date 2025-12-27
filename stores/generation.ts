@@ -3,11 +3,37 @@ import type {
   AspectRatio,
   SubtitleFont,
   SubtitleBackground,
+  SubtitleStyleType,
   VideoModel,
   GenerationStage,
   GenerationRecord,
   SavedVoice,
+  TimedSegment,
 } from '~/types'
+
+// 從 subtitleStyle 推斷字幕設定
+function migrateSubtitleStyle(style?: SubtitleStyleType): {
+  enabled: boolean
+  font: SubtitleFont
+  background: SubtitleBackground
+} {
+  if (!style || style === 'none') {
+    return { enabled: false, font: 'gothic', background: 'black' }
+  }
+  // gothic, ming -> 對應字體
+  if (style === 'gothic' || style === 'ming') {
+    return { enabled: true, font: style, background: 'black' }
+  }
+  // 舊版樣式映射 (white, black, etc.)
+  if (style === 'white') {
+    return { enabled: true, font: 'gothic', background: 'white' }
+  }
+  if (style === 'black') {
+    return { enabled: true, font: 'gothic', background: 'black' }
+  }
+  // 其他舊版樣式預設為 gothic + black
+  return { enabled: true, font: 'gothic', background: 'black' }
+}
 
 interface GenerationDraft {
   id: string
@@ -21,7 +47,10 @@ interface GenerationDraft {
   subtitleEnabled: boolean
   subtitleFont: SubtitleFont
   subtitleBackground: SubtitleBackground
+  titleY: number // 標題 Y 位置 (百分比 0-100，從頂部)
+  subtitleY: number // 字幕 Y 位置 (百分比 0-100，從頂部)
   videoModel: VideoModel
+  waveSpeedPrompt: string
 }
 
 const DEFAULT_DRAFT: GenerationDraft = {
@@ -36,7 +65,10 @@ const DEFAULT_DRAFT: GenerationDraft = {
   subtitleEnabled: true,
   subtitleFont: 'gothic',
   subtitleBackground: 'black',
+  titleY: 8, // 預設 8% 從頂部
+  subtitleY: 66, // 預設 66% (約 2/3 處)
   videoModel: 'vidnoz',
+  waveSpeedPrompt: '對著鏡頭講話，侃侃而談，搭配手部動作，輕鬆而自然',
 }
 
 export const useGenerationStore = defineStore('generation', () => {
@@ -49,6 +81,11 @@ export const useGenerationStore = defineStore('generation', () => {
   const generatedResult = ref<GenerationRecord | null>(null)
   const error = ref<string | null>(null)
   const stepDurations = ref<Record<string, number>>({})
+
+  // Subtitle state
+  const subtitleSegments = ref<TimedSegment[]>([])
+  const hasTimestamps = ref(false)
+  const isLoadingSubtitles = ref(false)
 
   // Debounced save
   let saveTimeout: ReturnType<typeof setTimeout> | null = null
@@ -129,6 +166,59 @@ export const useGenerationStore = defineStore('generation', () => {
     stage.value = 'idle'
     error.value = null
     stepDurations.value = {}
+    subtitleSegments.value = []
+    hasTimestamps.value = false
+    isLoadingSubtitles.value = false
+  }
+
+  // Set subtitle segments
+  function setSubtitleSegments(segments: TimedSegment[], withTimestamps: boolean = false) {
+    subtitleSegments.value = segments
+    hasTimestamps.value = withTimestamps
+  }
+
+  // Set subtitle loading state
+  function setLoadingSubtitles(loading: boolean) {
+    isLoadingSubtitles.value = loading
+  }
+
+  // Clear subtitle segments
+  function clearSubtitles() {
+    subtitleSegments.value = []
+    hasTimestamps.value = false
+  }
+
+  // Load from history record
+  function loadFromHistory(item: GenerationRecord) {
+    // 從 subtitleStyle 推斷字幕設定
+    const subtitleConfig = migrateSubtitleStyle(item.subtitleStyle)
+
+    // Update draft with history item data
+    draft.value = {
+      ...draft.value,
+      transcript: item.transcript,
+      title: item.title || '',
+      avatarPreview: item.avatarPreview,
+      aspectRatio: item.aspectRatio,
+      voicePreview: item.speakerId
+        ? { name: item.voicePreview || '已保存的聲音', speakerId: item.speakerId }
+        : undefined,
+      // 恢復字幕設定
+      subtitleEnabled: subtitleConfig.enabled,
+      subtitleFont: subtitleConfig.font,
+      subtitleBackground: subtitleConfig.background,
+    }
+
+    // Set generated result to show in preview
+    generatedResult.value = item
+
+    // Reset generation state
+    stage.value = 'complete'
+    error.value = null
+
+    // 清空舊字幕（將由 create.vue 重新生成）
+    subtitleSegments.value = []
+    hasTimestamps.value = false
   }
 
   return {
@@ -152,5 +242,16 @@ export const useGenerationStore = defineStore('generation', () => {
     setResult,
     setError,
     resetGeneration,
+
+    // Subtitles
+    subtitleSegments,
+    hasTimestamps,
+    isLoadingSubtitles,
+    setSubtitleSegments,
+    setLoadingSubtitles,
+    clearSubtitles,
+
+    // History
+    loadFromHistory,
   }
 })

@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import type { SuggestedTopic, MediaPlatform } from '~/types'
+import type { SuggestedTopic, MediaPlatform, DbPersona } from '~/types'
+import { Mic, Sparkles } from 'lucide-vue-next'
+import SoundWaveIndicator from '~/components/common/SoundWaveIndicator.vue'
 
 const generationStore = useGenerationStore()
+const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const toastStore = useToastStore()
 const { draft } = storeToRefs(generationStore)
 
@@ -9,6 +13,11 @@ const { draft } = storeToRefs(generationStore)
 const props = defineProps<{
   personaContent?: string
 }>()
+
+// Saved personas list
+const savedPersonas = ref<DbPersona[]>([])
+const isLoadingPersonas = ref(false)
+const currentPersonaId = ref<string | null>(null)
 
 const emit = defineEmits<{
   personaUpdate: [content: string]
@@ -38,6 +47,9 @@ const analysisPlatform = ref<MediaPlatform | null>(null)
 const topics = computed(() => transcriptGeneration.suggestedTopics.value)
 const isLoadingTopics = computed(() => transcriptGeneration.isLoadingTopics.value)
 const hasPersona = computed(() => !!props.personaContent?.trim() || !!analysisResult.value)
+
+// Track selected topic
+const selectedTopicId = ref<string | null>(null)
 
 // Platform labels
 const platformLabels: Record<MediaPlatform, string> = {
@@ -78,6 +90,37 @@ const urlValidation = computed(() => {
   }
 })
 
+// Load saved personas on mount
+onMounted(async () => {
+  if (authStore.user) {
+    await loadSavedPersonas()
+  }
+})
+
+// Watch for auth changes
+watch(() => authStore.user, async (user) => {
+  if (user) {
+    await loadSavedPersonas()
+  } else {
+    savedPersonas.value = []
+  }
+})
+
+async function loadSavedPersonas() {
+  if (!authStore.user) return
+
+  try {
+    isLoadingPersonas.value = true
+    const { getAllPersonas } = usePersonaStorage()
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    savedPersonas.value = await getAllPersonas(userId)
+  } catch (err) {
+    console.error('Failed to load saved personas:', err)
+  } finally {
+    isLoadingPersonas.value = false
+  }
+}
+
 // Watch for persona content changes to load topics
 watch(() => props.personaContent, async (content) => {
   if (content && content.trim()) {
@@ -85,6 +128,30 @@ watch(() => props.personaContent, async (content) => {
     await loadTopics(content)
   }
 }, { immediate: true })
+
+// Watch for preferences changes and load saved persona
+watch(
+  () => preferencesStore.preferences?.persona_id,
+  async (personaId) => {
+    // Only apply if we don't already have a persona set
+    if (personaId && !analysisResult.value) {
+      try {
+        const { getPersonaById } = usePersonaStorage()
+        const persona = await getPersonaById(personaId)
+        if (persona) {
+          analysisResult.value = persona.content
+          currentPersonaId.value = persona.id
+          emit('personaUpdate', persona.content)
+          console.log('Applied default persona from preferences:', persona.name)
+        }
+      } catch (err) {
+        console.error('Failed to load saved persona:', err)
+      }
+    } else if (!personaId) {
+      currentPersonaId.value = null
+    }
+  }
+)
 
 function handleInput(value: string) {
   generationStore.updateDraft({ transcript: value })
@@ -142,6 +209,7 @@ async function handleRefreshTopics() {
 }
 
 async function handleSelectTopic(topic: SuggestedTopic) {
+  selectedTopicId.value = topic.id
   try {
     toastStore.info('正在生成腳本...')
     const transcript = await transcriptGeneration.generateTranscript(topic.title)
@@ -177,6 +245,37 @@ async function handleAnalyzeMedia() {
       emit('personaUpdate', result)
       toastStore.success('分析完成！')
       showPersonaModal.value = false
+
+      // Save persona to Supabase
+      if (authStore.user) {
+        try {
+          const { savePersona } = usePersonaStorage()
+          const userId = authStore.authInfo.email || authStore.authInfo.sub
+          const platform = urlValidation.value.platform!
+
+          const savedPersona = await savePersona({
+            user_id: userId,
+            name: `${platformLabels[platform]} 分析`,
+            content: result,
+            source: 'media',
+            source_urls: [mediaUrl.value.trim()],
+            platforms: [platform],
+            job_id: null,
+          }, userId)
+
+          // Update user preference
+          await preferencesStore.setPersonaPreference(userId, savedPersona.id)
+          currentPersonaId.value = savedPersona.id
+
+          // Reload personas list
+          await loadSavedPersonas()
+          console.log('Saved persona to Supabase:', savedPersona.id)
+        } catch (saveErr) {
+          console.error('Failed to save persona:', saveErr)
+          // Don't show error to user - analysis succeeded, just save failed
+        }
+      }
+
       mediaUrl.value = ''
     }
   } catch (err: any) {
@@ -187,10 +286,93 @@ async function handleAnalyzeMedia() {
   }
 }
 
-function handleClearPersona() {
+async function handleClearPersona() {
   analysisResult.value = null
   analysisPlatform.value = null
   emit('personaUpdate', '')
+
+  // Clear persona preference in Supabase
+  if (authStore.user) {
+    try {
+      const userId = authStore.authInfo.email || authStore.authInfo.sub
+      await preferencesStore.setPersonaPreference(userId, null)
+    } catch (err) {
+      console.error('Failed to clear persona preference:', err)
+    }
+  }
+}
+
+async function handleSelectPersona(persona: DbPersona) {
+  try {
+    // Apply persona
+    analysisResult.value = persona.content
+    currentPersonaId.value = persona.id
+    emit('personaUpdate', persona.content)
+
+    // Update preference
+    if (authStore.user) {
+      const userId = authStore.authInfo.email || authStore.authInfo.sub
+      await preferencesStore.setPersonaPreference(userId, persona.id)
+
+      // Record usage
+      const { recordPersonaUsage } = usePersonaStorage()
+      await recordPersonaUsage(persona.id)
+    }
+
+    showPersonaModal.value = false
+    toastStore.success('已套用主題方向')
+  } catch (err) {
+    console.error('Failed to select persona:', err)
+    toastStore.error('套用失敗')
+  }
+}
+
+async function handleDeletePersona(personaId: string) {
+  try {
+    const { deletePersona } = usePersonaStorage()
+    await deletePersona(personaId)
+
+    // Remove from list
+    savedPersonas.value = savedPersonas.value.filter(p => p.id !== personaId)
+
+    // Clear if current persona was deleted
+    if (currentPersonaId.value === personaId) {
+      currentPersonaId.value = null
+      analysisResult.value = null
+      emit('personaUpdate', '')
+
+      if (authStore.user) {
+        const userId = authStore.authInfo.email || authStore.authInfo.sub
+        await preferencesStore.setPersonaPreference(userId, null)
+      }
+    }
+
+    toastStore.success('已刪除')
+  } catch (err) {
+    console.error('Failed to delete persona:', err)
+    toastStore.error('刪除失敗')
+  }
+}
+
+// Parse title from analysis content
+function parseAnalysisTitle(analysis: string): string | null {
+  const lines = analysis.split('\n')
+  const firstLine = lines[0]?.trim()
+  if (!firstLine) return null
+
+  // Match pattern: "# ... - 標題名稱"
+  const match = firstLine.match(/^#\s+.*?\s+-\s+(.+)$/)
+  if (match) {
+    return match[1].trim()
+  }
+
+  // Fallback: try to find any meaningful text after "-"
+  const dashIndex = firstLine.indexOf(' - ')
+  if (dashIndex !== -1) {
+    return firstLine.substring(dashIndex + 3).trim()
+  }
+
+  return null
 }
 
 function openAIModal() {
@@ -201,152 +383,207 @@ function closeAIModal() {
   showAIModal.value = false
   aiTopic.value = ''
 }
+
+function handleTitleInput(value: string) {
+  generationStore.updateDraft({ title: value })
+}
+
+// Interim text for real-time display
+const titleInterimText = ref('')
+const transcriptInterimText = ref('')
+
+// Display text combining confirmed and interim results
+const displayTitle = computed(() => draft.value.title + titleInterimText.value)
+const displayTranscript = computed(() => draft.value.transcript + transcriptInterimText.value)
+
+// Speech recognition for title
+const titleSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ title: draft.value.title + text })
+      titleInterimText.value = ''
+    } else {
+      titleInterimText.value = text
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
+
+// Speech recognition for transcript
+const transcriptSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ transcript: draft.value.transcript + text })
+      transcriptInterimText.value = ''
+    } else {
+      transcriptInterimText.value = text
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
+
+function handleTitleMicClick() {
+  if (titleSpeech.isListening.value) {
+    titleSpeech.stopListening()
+  } else {
+    titleSpeech.startListening()
+  }
+}
+
+function handleTranscriptMicClick() {
+  if (transcriptSpeech.isListening.value) {
+    transcriptSpeech.stopListening()
+  } else {
+    transcriptSpeech.startListening()
+  }
+}
 </script>
 
 <template>
-  <div class="card p-4">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-3">
-      <label class="font-bold text-stone-800">4. 內容逐字稿</label>
-      <span
-        :class="[
-          'text-xs',
-          isOverLimit ? 'text-red-500' : 'text-stone-400',
-        ]"
-      >
-        {{ charCount }} / {{ maxLength }}
-      </span>
-    </div>
-
-    <!-- Topic Suggestions Section -->
-    <div class="mb-4">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm text-stone-600">推薦主題</span>
-        <div class="flex items-center gap-2">
-          <!-- Refresh button -->
-          <button
-            v-if="hasPersona"
-            class="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1"
-            :disabled="isLoadingTopics"
-            @click="handleRefreshTopics"
-          >
-            <svg
-              class="w-3.5 h-3.5"
-              :class="{ 'animate-spin': isLoadingTopics }"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <!-- Persona settings button -->
-          <button
-            class="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700"
-            @click="showPersonaModal = true"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-            </svg>
-            {{ hasPersona ? '主題方向' : '設定主題' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Topic list or empty state -->
-      <div v-if="isLoadingTopics" class="flex items-center justify-center py-4">
-        <svg class="animate-spin w-5 h-5 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-        <span class="text-sm text-stone-500">正在生成推薦主題...</span>
-      </div>
-
-      <div v-else-if="topics.length > 0" class="flex flex-wrap gap-2">
-        <button
-          v-for="topic in topics"
-          :key="topic.id"
-          class="px-3 py-1.5 text-sm bg-purple-50 text-purple-700 rounded-full hover:bg-purple-100 transition-colors"
-          @click="handleSelectTopic(topic)"
-        >
-          {{ topic.title }}
-        </button>
-      </div>
-
-      <p v-else class="text-sm text-stone-400">
-        無（請先設定頻道風格）
-      </p>
-
-      <!-- Persona status -->
-      <div v-if="hasPersona" class="mt-2 flex items-center gap-2">
-        <span class="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
-          已設定{{ analysisPlatform ? ` (${platformLabels[analysisPlatform]})` : '' }}
-        </span>
-        <button
-          class="text-xs text-stone-400 hover:text-red-500"
-          @click="handleClearPersona"
-        >
-          清除
-        </button>
-      </div>
-    </div>
-
-    <!-- Title input -->
-    <div class="mb-3">
+  <div class="card p-3">
+    <!-- Header with topic suggestions inline -->
+    <div class="flex items-center justify-between mb-2">
       <div class="flex items-center gap-2">
-        <input
-          :value="draft.title"
-          type="text"
-          placeholder="標題（可選）"
-          class="flex-1 px-3 py-2 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-          @input="generationStore.updateDraft({ title: ($event.target as HTMLInputElement).value })"
-        />
-        <button
-          class="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-          title="AI 生成標題"
-          :disabled="!draft.transcript.trim()"
-          @click="handleGenerateTitle"
+        <label class="text-sm font-medium text-stone-700">內容逐字稿</label>
+        <span
+          :class="[
+            'text-xs',
+            isOverLimit ? 'text-red-500' : 'text-stone-400',
+          ]"
         >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          {{ charCount }}/{{ maxLength }}
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Refresh button -->
+        <button
+          v-if="hasPersona"
+          class="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1"
+          :disabled="isLoadingTopics"
+          @click="handleRefreshTopics"
+        >
+          <svg
+            class="w-3.5 h-3.5"
+            :class="{ 'animate-spin': isLoadingTopics }"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+        <!-- Persona settings button -->
+        <button
+          class="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700"
+          @click="showPersonaModal = true"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+          {{ hasPersona ? '主題' : '設定' }}
+        </button>
+        <!-- AI generate button -->
+        <button
+          class="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700"
+          @click="openAIModal"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
+          AI
         </button>
       </div>
     </div>
 
-    <!-- Transcript textarea -->
-    <textarea
-      :value="draft.transcript"
-      placeholder="輸入影片主題或逐字稿"
-      class="w-full h-32 p-4 text-stone-800 bg-stone-50 border border-stone-200 rounded-xl resize-none focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-      @input="handleInput(($event.target as HTMLTextAreaElement).value)"
-    />
+    <!-- Topic chips (compact) -->
+    <div v-if="isLoadingTopics" class="flex items-center py-2">
+      <svg class="animate-spin w-4 h-4 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+      <span class="text-xs text-stone-500">生成中...</span>
+    </div>
 
-    <!-- Action buttons -->
-    <div class="mt-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
+    <div v-else-if="topics.length > 0" class="flex gap-1.5 mb-2 overflow-x-auto scrollbar-hide">
+      <button
+        v-for="topic in topics"
+        :key="topic.id"
+        class="flex-shrink-0 px-2 py-1 text-xs rounded-full transition-colors"
+        :class="selectedTopicId === topic.id
+          ? 'bg-purple-100 text-purple-700'
+          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'"
+        @click="handleSelectTopic(topic)"
+      >
+        {{ topic.title }}
+      </button>
+    </div>
+
+    <!-- Section label -->
+   
+
+    <!-- Title input with mic and AI buttons -->
+    <div class="relative mb-2">
+      <input
+        :value="displayTitle"
+        type="text"
+        placeholder="輸入標題..."
+        class="w-full px-3 py-2 pr-24 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        @input="handleTitleInput(($event.target as HTMLInputElement).value)"
+      />
+      <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
         <button
-          class="flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
+          class="p-1.5 transition-colors"
+          :class="titleSpeech.isListening.value
+            ? 'text-red-500'
+            : 'text-stone-400 hover:text-stone-600'"
+          :title="titleSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTitleMicClick"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-          </svg>
-          語音輸入
+          <SoundWaveIndicator v-if="titleSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
+        </button>
+        <button
+          class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
+          title="AI 生成標題"
+          @click="handleGenerateTitle"
+        >
+          <Sparkles class="w-3.5 h-3.5" />
+          生成
         </button>
       </div>
+    </div>
 
-      <button
-        class="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-        @click="openAIModal"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-        </svg>
-        AI 生成
-      </button>
+    <!-- Transcript textarea with mic and AI buttons -->
+    <div class="relative">
+      <textarea
+        :value="displayTranscript"
+        placeholder="輸入逐字稿..."
+        class="w-full h-20 p-3 pr-24 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl resize-none focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        @input="handleInput(($event.target as HTMLTextAreaElement).value)"
+      />
+      <div class="absolute right-2 top-3 flex items-center gap-1">
+        <button
+          class="p-1.5 transition-colors"
+          :class="transcriptSpeech.isListening.value
+            ? 'text-red-500'
+            : 'text-stone-400 hover:text-stone-600'"
+          :title="transcriptSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTranscriptMicClick"
+        >
+          <SoundWaveIndicator v-if="transcriptSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
+        </button>
+        <button
+          class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
+          title="AI 生成腳本"
+          @click="openAIModal"
+        >
+          <Sparkles class="w-3.5 h-3.5" />
+          生成
+        </button>
+      </div>
     </div>
 
     <!-- Persona Modal -->
@@ -374,7 +611,68 @@ function closeAIModal() {
           </div>
 
           <!-- Content -->
-          <div class="p-4 space-y-4">
+          <div class="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+            <!-- Saved personas list -->
+            <div v-if="savedPersonas.length > 0" class="space-y-2">
+              <label class="text-sm font-medium text-stone-600 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                已保存的方向 ({{ savedPersonas.length }})
+              </label>
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                <div
+                  v-for="persona in savedPersonas"
+                  :key="persona.id"
+                  class="p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50"
+                  :class="currentPersonaId === persona.id ? 'border-purple-500 bg-purple-50' : 'border-stone-200'"
+                  @click="handleSelectPersona(persona)"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-medium text-stone-800 truncate">
+                        {{ parseAnalysisTitle(persona.content) || persona.name }}
+                      </div>
+                      <div class="text-xs text-stone-500 mt-0.5">
+                        {{ persona.platforms.join(', ') }} · 已使用 {{ persona.use_count }} 次
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 ml-2">
+                      <span v-if="currentPersonaId === persona.id" class="text-xs text-purple-600 font-medium">
+                        使用中
+                      </span>
+                      <button
+                        class="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+                        @click.stop="handleDeletePersona(persona.id)"
+                      >
+                        <svg class="w-4 h-4 text-stone-400 hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loading state -->
+            <div v-else-if="isLoadingPersonas" class="flex items-center justify-center py-4">
+              <svg class="animate-spin w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            </div>
+
+            <!-- Divider -->
+            <div v-if="savedPersonas.length > 0" class="border-t border-stone-200 pt-4">
+              <label class="text-sm font-medium text-stone-600 flex items-center gap-2 mb-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                新增方向
+              </label>
+            </div>
+
             <div>
               <label class="block text-sm font-medium text-stone-700 mb-2">媒體網址</label>
               <input
@@ -510,3 +808,13 @@ function closeAIModal() {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>
