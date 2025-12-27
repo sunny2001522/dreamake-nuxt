@@ -2,12 +2,13 @@ import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import { clientId } from '~/constants/appInfo'
 
 export default defineNuxtPlugin((nuxtApp) => {
-  const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN
-  const OIDC_DOMAIN = import.meta.env.VITE_OIDC_DOMAIN
+  const config = useRuntimeConfig()
+  const BASE_DOMAIN = config.public.baseDomain
+  const OIDC_DOMAIN = config.public.oidcDomain
 
   // 確保環境變數存在
   if (!OIDC_DOMAIN) {
-    console.error('VITE_OIDC_DOMAIN environment variable is not set')
+    console.error('oidcDomain is not set in runtimeConfig')
     return
   }
 
