@@ -3,6 +3,7 @@ import type { SavedVoice } from '~/types'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const toastStore = useToastStore()
 const { draft } = storeToRefs(generationStore)
 
@@ -38,6 +39,10 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isCloning = ref(false)
 const cloningVoiceName = ref<string | null>(null)
 
+// Audio preview state
+const previewingVoiceId = ref<string | null>(null)
+const previewAudio = ref<HTMLAudioElement | null>(null)
+
 // Load saved voices on mount
 onMounted(() => {
   if (authStore.user) {
@@ -54,13 +59,61 @@ watch(() => authStore.user, (user) => {
   }
 })
 
+// Watch for preferences changes and apply default voice
+watch(
+  () => preferencesStore.preferences?.voice_id,
+  async (voiceId) => {
+    // Only apply if we don't already have a voice selected
+    if (voiceId && !draft.value.voicePreview) {
+      // Find the voice in savedVoices
+      const matchedVoice = savedVoices.value.find(v => v.supabaseId === voiceId)
+      if (matchedVoice) {
+        applyDefaultVoice(matchedVoice)
+        console.log('Applied default voice from preferences:', matchedVoice.name)
+      }
+    }
+  }
+)
+
+// Also check after savedVoices are loaded
+watch(savedVoices, (voices) => {
+  const voiceId = preferencesStore.preferences?.voice_id
+  if (voiceId && voices.length > 0 && !draft.value.voicePreview) {
+    const matchedVoice = voices.find(v => v.supabaseId === voiceId)
+    if (matchedVoice) {
+      applyDefaultVoice(matchedVoice)
+      console.log('Applied default voice after loading:', matchedVoice.name)
+    }
+  }
+})
+
+// Apply default voice without closing modal
+function applyDefaultVoice(voice: SavedVoice) {
+  generationStore.setVoice(voice)
+}
+
 async function loadSavedVoices() {
   if (!authStore.user) return
 
   try {
     isLoadingVoices.value = true
-    const response = await $fetch<{ voices: SavedVoice[] }>('/api/voice')
-    savedVoices.value = response.voices || []
+    const { getAllVoices } = useVoiceStorage()
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+
+    const dbVoices = await getAllVoices(userId)
+
+    savedVoices.value = dbVoices.map(voice => ({
+      id: parseInt(voice.id) || undefined,
+      supabaseId: voice.id,
+      name: voice.name,
+      speakerId: voice.speaker_id,
+      originalFileName: voice.original_file_name,
+      audioUrl: voice.audio_url || undefined,
+      audioMimeType: voice.audio_mime_type || undefined,
+      createdAt: new Date(voice.created_at),
+      lastUsedAt: new Date(voice.last_used_at),
+      useCount: voice.use_count,
+    }))
   } catch (err) {
     console.error('Failed to load saved voices:', err)
   } finally {
@@ -69,9 +122,15 @@ async function loadSavedVoices() {
 }
 
 function handleClick() {
+  openModal()
+}
+
+function openModal() {
   showModal.value = true
   modalTab.value = savedVoices.value.length > 0 ? 'history' : 'record'
 }
+
+defineExpose({ openModal })
 
 function handleCloseModal() {
   stopRecording()
@@ -261,10 +320,22 @@ async function cloneVoice(file: File, name: string) {
   }
 }
 
-function handleSelectVoice(voice: SavedVoice) {
+async function handleSelectVoice(voice: SavedVoice) {
   generationStore.setVoice(voice)
   showModal.value = false
   toastStore.success(`已選擇語音: ${voice.name}`)
+
+  // Save to preferences
+  if (voice.supabaseId && authStore.user) {
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    const { updateVoicePreference } = usePreferencesStorage()
+    try {
+      await updateVoicePreference(userId, voice.supabaseId)
+      console.log('Voice preference saved:', voice.supabaseId)
+    } catch (err) {
+      console.error('Failed to save voice preference:', err)
+    }
+  }
 }
 
 async function handleDeleteVoice(event: Event, voice: SavedVoice) {
@@ -306,12 +377,61 @@ function formatDuration(seconds: number): string {
 
 const hasSavedVoices = computed(() => savedVoices.value.length > 0)
 const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DURATION) * 100)
+
+// Audio preview functions
+function handlePreviewVoice(event: Event, voice: SavedVoice) {
+  event.stopPropagation()
+
+  // 沒有 audioUrl 直接返回（按鈕已禁用）
+  if (!voice.audioUrl) return
+
+  const voiceId = voice.supabaseId || String(voice.id)
+
+  // 如果正在播放此語音，停止它
+  if (previewingVoiceId.value === voiceId) {
+    stopPreview()
+    return
+  }
+
+  // 停止當前預覽
+  stopPreview()
+
+  // 開始新預覽
+  previewingVoiceId.value = voiceId
+  previewAudio.value = new Audio(voice.audioUrl)
+  previewAudio.value.play()
+
+  previewAudio.value.onended = () => {
+    previewingVoiceId.value = null
+    previewAudio.value = null
+  }
+
+  previewAudio.value.onerror = () => {
+    // 靜默處理錯誤
+    previewingVoiceId.value = null
+    previewAudio.value = null
+  }
+}
+
+function stopPreview() {
+  if (previewAudio.value) {
+    previewAudio.value.pause()
+    previewAudio.value = null
+  }
+  previewingVoiceId.value = null
+}
+
+// Clean up on unmount
+onUnmounted(() => {
+  stopPreview()
+})
 </script>
 
 <template>
   <div class="card p-4">
     <div class="flex items-center justify-between mb-3">
-      <label class="text-sm font-medium text-stone-700">語音</label>
+      <label class="text-sm font-medium text-stone-700">聲音</label>
+      <span class="text-xs text-stone-400">選擇要模仿的人聲</span>
     </div>
 
     <!-- Hidden file input -->
@@ -326,9 +446,9 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
     <!-- Selected Voice Preview -->
     <div
       v-if="draft.voicePreview"
-      class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl"
+      class="flex items-center gap-3 p-3 bg-stone-100 rounded-xl"
     >
-      <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
+      <div class="w-10 h-10 bg-stone-700 rounded-full flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
         </svg>
@@ -339,7 +459,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
       </div>
       <div class="flex items-center gap-2">
         <button
-          class="p-2 text-stone-400 hover:text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+          class="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
           @click="handleClick"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -360,13 +480,15 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
     <!-- Empty State Button -->
     <button
       v-else
-      class="w-full p-6 border-2 border-dashed border-stone-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-colors text-center"
+      class="w-full p-6 border-2 border-dashed border-stone-200 rounded-xl hover:border-stone-400 hover:bg-stone-50 transition-colors text-center"
       @click="handleClick"
     >
       <svg class="w-8 h-8 mx-auto mb-2 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
       </svg>
-      <p class="text-sm text-stone-500">選擇或錄製語音</p>
+      <p class="text-sm text-stone-500">
+        {{ savedVoices.length > 0 ? savedVoices[0].name : '選擇或錄製語音' }}
+      </p>
     </button>
 
     <!-- Modal -->
@@ -441,7 +563,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
             <!-- History Tab -->
             <div v-if="modalTab === 'history'">
               <div v-if="isLoadingVoices" class="flex items-center justify-center py-12">
-                <svg class="animate-spin w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-8 h-8 text-stone-600" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -459,15 +581,57 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
                   :key="voice.supabaseId || voice.id"
                   class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all group"
                   :class="draft.voicePreview?.speakerId === voice.speakerId
-                    ? 'bg-purple-100 border-2 border-purple-500'
+                    ? 'bg-stone-200 border-2 border-stone-600'
                     : 'bg-stone-50 hover:bg-stone-100 border-2 border-transparent'"
                   @click="handleSelectVoice(voice)"
                 >
-                  <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  <!-- Preview play button -->
+                  <button
+                    class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                    :class="[
+                      !voice.audioUrl
+                        ? 'bg-stone-300 cursor-not-allowed'
+                        : previewingVoiceId === (voice.supabaseId || String(voice.id))
+                          ? 'bg-stone-800 hover:bg-stone-900'
+                          : 'bg-stone-700 hover:bg-stone-800'
+                    ]"
+                    :disabled="!voice.audioUrl"
+                    @click="voice.audioUrl && handlePreviewVoice($event, voice)"
+                  >
+                    <!-- 音波動畫 - 播放中 -->
+                    <div
+                      v-if="previewingVoiceId === (voice.supabaseId || String(voice.id))"
+                      class="flex items-center justify-center gap-0.5 w-4 h-4"
+                    >
+                      <div
+                        v-for="i in 4"
+                        :key="i"
+                        class="w-0.5 bg-white rounded-full animate-audio-wave"
+                        :style="{
+                          height: `${8 + Math.sin((i - 1) * 0.8) * 4}px`,
+                          animationDelay: `${(i - 1) * 100}ms`
+                        }"
+                      />
+                    </div>
+                    <!-- Play triangle icon - 有音訊時 -->
+                    <svg
+                      v-else-if="voice.audioUrl"
+                      class="w-4 h-4 text-white ml-0.5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M8 5v14l11-7z" />
                     </svg>
-                  </div>
+                    <!-- Disabled icon - 無音訊 -->
+                    <svg
+                      v-else
+                      class="w-4 h-4 text-stone-500"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </button>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-stone-800 truncate">{{ voice.name }}</p>
                     <p class="text-xs text-stone-500">{{ voice.originalFileName }}</p>
@@ -542,7 +706,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
                 class="px-8 py-4 rounded-full font-medium transition-all flex items-center gap-3"
                 :class="isRecording
                   ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'bg-purple-500 text-white hover:bg-purple-600'"
+                  : 'bg-stone-800 text-white hover:bg-stone-900'"
                 @click="isRecording ? stopRecording() : startRecording()"
               >
                 <svg v-if="isRecording" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -556,7 +720,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
 
               <!-- Processing state -->
               <div v-if="isProcessing" class="text-center">
-                <svg class="animate-spin w-8 h-8 text-purple-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-8 h-8 text-stone-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -568,7 +732,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
             <div v-else-if="modalTab === 'upload'" class="space-y-6">
               <!-- Processing overlay -->
               <div v-if="isProcessing || isCloning" class="flex flex-col items-center justify-center py-12">
-                <svg class="animate-spin w-12 h-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-12 h-12 text-stone-600 mb-4" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -582,7 +746,7 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
               <div
                 v-else
                 class="border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer"
-                :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-stone-300 hover:border-purple-400'"
+                :class="isDragging ? 'border-stone-500 bg-stone-50' : 'border-stone-300 hover:border-stone-400'"
                 @dragover="handleDragOver"
                 @dragleave="handleDragLeave"
                 @drop="handleDrop"
@@ -603,3 +767,18 @@ const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DU
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@keyframes audio-wave {
+  0%, 100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-audio-wave {
+  animation: audio-wave 0.4s ease-in-out infinite;
+}
+</style>

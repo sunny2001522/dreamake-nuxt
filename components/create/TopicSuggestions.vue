@@ -10,6 +10,9 @@ const transcriptGeneration = useTranscriptGeneration()
 const topics = computed(() => transcriptGeneration.suggestedTopics.value)
 const isLoading = computed(() => transcriptGeneration.isLoadingTopics.value)
 
+// Track selected topic
+const selectedTopicId = ref<string | null>(null)
+
 // Props for persona content
 const props = defineProps<{
   personaContent?: string
@@ -40,6 +43,7 @@ async function handleRefresh() {
 }
 
 async function handleSelectTopic(topic: SuggestedTopic) {
+  selectedTopicId.value = topic.id
   try {
     toastStore.info('正在生成腳本...')
     const transcript = await transcriptGeneration.generateTranscript(topic.title)
@@ -88,12 +92,18 @@ async function handleSelectTopic(topic: SuggestedTopic) {
       <button
         v-for="topic in topics"
         :key="topic.id"
-        class="w-full text-left p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors group"
+        class="w-full text-left p-3 rounded-xl transition-colors group border"
+        :class="selectedTopicId === topic.id
+          ? 'bg-purple-100 border-purple-400'
+          : 'bg-stone-100 border-stone-300 hover:bg-stone-200'"
         @click="handleSelectTopic(topic)"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1">
-            <p class="text-sm font-medium text-purple-700 group-hover:text-purple-800">
+            <p
+              class="text-sm font-medium"
+              :class="selectedTopicId === topic.id ? 'text-purple-700' : 'text-stone-700'"
+            >
               {{ topic.title }}
             </p>
             <p v-if="topic.description" class="text-xs text-stone-500 mt-0.5 line-clamp-2">
@@ -104,7 +114,13 @@ async function handleSelectTopic(topic: SuggestedTopic) {
             <span v-if="topic.estimatedDuration" class="text-xs text-stone-400">
               {{ topic.estimatedDuration }}
             </span>
-            <svg class="w-4 h-4 text-purple-400 group-hover:text-purple-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              class="w-4 h-4 transition-colors"
+              :class="selectedTopicId === topic.id ? 'text-purple-600' : 'text-stone-500 group-hover:text-stone-700'"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </div>

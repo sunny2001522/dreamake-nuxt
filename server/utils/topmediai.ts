@@ -3,6 +3,10 @@ import { fixPronunciation } from './pronunciationFix'
 const TOPMEDIAI_BASE_URL = 'https://api.topmediai.com/v1'
 
 interface TextToSpeechResponse {
+  code?: number
+  message?: string
+  status?: string
+  error?: string
   data?: {
     audio_url?: string
     oss_url?: string
@@ -35,8 +39,13 @@ export async function textToSpeech(
 
   // Apply pronunciation fix for Taiwan accent
   const ttsText = fixPronunciation(transcript.substring(0, 500))
-  console.log('TOPMEDIAI TTS - speaker ID:', speakerId)
-  console.log('TOPMEDIAI TTS - text (pronunciation fixed):', ttsText.substring(0, 100))
+
+  // Debug logging
+  console.log('=== TOPMEDIAI TTS Debug ===')
+  console.log('API Key (first 8 chars):', apiKey?.substring(0, 8) + '...')
+  console.log('Speaker ID:', speakerId)
+  console.log('Text length:', ttsText.length)
+  console.log('Text (first 100 chars):', ttsText.substring(0, 100))
 
   const ttsResponse = await fetch(`${TOPMEDIAI_BASE_URL}/text2speech`, {
     method: 'POST',
@@ -65,6 +74,18 @@ export async function textToSpeech(
 
   const ttsResult: TextToSpeechResponse = await ttsResponse.json()
 
+  // Debug: Log the raw response
+  console.log('TOPMEDIAI TTS raw response:', JSON.stringify(ttsResult, null, 2))
+  console.log('=== End TOPMEDIAI Debug ===')
+
+  // Check for API-level errors (some APIs return 200 with error in body)
+  if (ttsResult.code && ttsResult.code !== 0) {
+    throw new Error(`TopMediai API error (code ${ttsResult.code}): ${ttsResult.message || 'Unknown error'}`)
+  }
+  if (ttsResult.error) {
+    throw new Error(`TopMediai API error: ${ttsResult.error}`)
+  }
+
   // Extract audio URL from response (handle different response structures)
   const audioUrl = ttsResult.data?.audio_url ||
                    ttsResult.data?.oss_url ||
@@ -72,7 +93,7 @@ export async function textToSpeech(
                    ttsResult.oss_url
 
   if (!audioUrl) {
-    throw new Error('TOPMEDIAI TTS response did not contain an audio URL.')
+    throw new Error(`TOPMEDIAI TTS response did not contain an audio URL. Full response: ${JSON.stringify(ttsResult)}`)
   }
 
   console.log('TOPMEDIAI TTS generated successfully, audio URL:', audioUrl)
