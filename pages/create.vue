@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { GenerationRecord } from '~/types'
-
 definePageMeta({
   layout: 'default',
 })
@@ -13,6 +11,45 @@ const toastStore = useToastStore()
 const router = useRouter()
 
 const { draft, isGenerating } = storeToRefs(generationStore)
+
+// 監聽照片、聲音、逐字稿變化，清空歷史預覽（不包含標題）
+watch(
+  () => ({
+    avatar: draft.value.avatarPreview,
+    voice: draft.value.voicePreview?.speakerId,
+    transcript: draft.value.transcript,
+  }),
+  (newVal, oldVal) => {
+    // 只有在有歷史預覽時才需要清空
+    if (generationStore.generatedResult && oldVal) {
+      if (
+        newVal.avatar !== oldVal.avatar ||
+        newVal.voice !== oldVal.voice ||
+        newVal.transcript !== oldVal.transcript
+      ) {
+        generationStore.generatedResult = null
+      }
+    }
+  }
+)
+
+// 監聽歷史載入，自動生成字幕
+watch(
+  () => generationStore.generatedResult,
+  async (newResult) => {
+    // 只在載入歷史記錄時觸發（有 audioUrl 但沒有字幕）
+    if (
+      newResult?.audioUrl &&
+      draft.value.subtitleEnabled &&
+      generationStore.subtitleSegments.length === 0 &&
+      !generationStore.isLoadingSubtitles
+    ) {
+      console.log('Loading history item, generating subtitles...')
+      await generateSubtitles(newResult.audioUrl, newResult.transcript)
+    }
+  },
+  { immediate: false }
+)
 
 // Persona content for topic suggestions
 const personaContent = ref('')
@@ -61,32 +98,6 @@ onMounted(async () => {
       } catch (err) {
         console.error('Failed to load saved persona:', err)
       }
-    }
-  }
-
-  // Check for history item to load from sessionStorage
-  const loadHistoryItem = sessionStorage.getItem('loadHistoryItem')
-  const triggerRegenerate = sessionStorage.getItem('triggerRegenerate')
-
-  if (loadHistoryItem) {
-    try {
-      const item = JSON.parse(loadHistoryItem) as GenerationRecord
-
-      // Load history item into store
-      generationStore.loadFromHistory(item)
-
-      // Clear sessionStorage
-      sessionStorage.removeItem('loadHistoryItem')
-
-      // If regenerate flag is set, trigger generation
-      if (triggerRegenerate === 'true') {
-        sessionStorage.removeItem('triggerRegenerate')
-        // Use nextTick to ensure UI is updated before triggering
-        await nextTick()
-        handleGenerateVideo()
-      }
-    } catch (err) {
-      console.error('Failed to load history item:', err)
     }
   }
 })
@@ -258,6 +269,19 @@ async function handleGenerateVideo() {
       result.pollEndpoint
     )
 
+    // Upload video to Supabase Storage for permanent URL
+    const { uploadVideoToStorage } = useVideoStorage()
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    let permanentVideoUrl = videoResult.videoUrl
+
+    try {
+      toastStore.info('正在保存影片...')
+      permanentVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+    } catch (uploadErr) {
+      console.warn('Failed to upload video to storage, using original URL:', uploadErr)
+      // If upload fails, still use original URL (though it may expire)
+    }
+
     const record: GenerationRecord = {
       id: Date.now().toString(),
       transcript: draft.value.transcript,
@@ -266,7 +290,7 @@ async function handleGenerateVideo() {
       createdAt: new Date(),
       status: 'completed',
       audioUrl: result.audioUrl,
-      videoUrl: videoResult.videoUrl,
+      videoUrl: permanentVideoUrl,
       speakerId,
       title: draft.value.title || undefined,
       avatarPreview: avatarUrl,
@@ -362,7 +386,7 @@ async function handleGenerateVideo() {
     <div class="container mx-auto px-4 h-full">
       <div class="grid grid-cols-2 gap-6 py-3 h-full">
         <!-- Left Column: Inputs -->
-        <div class="h-full overflow-y-auto space-y-3">
+        <div class="relative h-full overflow-y-auto space-y-3">
           <!-- Step 1 & 2: Image and Voice side by side -->
           <div class="grid grid-cols-2 gap-3">
             <ImageUploader ref="imageUploaderRef" />
@@ -380,6 +404,18 @@ async function handleGenerateVideo() {
 
           <!-- Generate Buttons with inline settings -->
           <CreateGenerateButtons />
+
+          <!-- Generating Overlay -->
+          <div
+            v-if="isGenerating"
+            class="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center overflow-hidden rounded-lg"
+          >
+            <div class="ripple-container">
+              <div class="ripple"></div>
+              <div class="ripple"></div>
+              <div class="ripple"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Right Column: Preview -->
@@ -409,3 +445,39 @@ async function handleGenerateVideo() {
   <!-- Desktop History Sidebar -->
   <CreateHistorySidebar v-model="showHistorySidebar" />
 </template>
+
+<style scoped>
+.ripple-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.ripple {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #a855f7;
+  border-radius: 50%;
+  opacity: 0;
+  animation: ripple 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+.ripple:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+.ripple:nth-child(3) {
+  animation-delay: 1s;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+</style>

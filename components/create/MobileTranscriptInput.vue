@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Mic, Sparkles } from 'lucide-vue-next'
+import SoundWaveIndicator from '~/components/common/SoundWaveIndicator.vue'
 
 const generationStore = useGenerationStore()
 const toastStore = useToastStore()
@@ -15,6 +16,42 @@ const aiTopic = ref('')
 
 // Textarea auto-resize
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+// Interim text for real-time display
+const titleInterimText = ref('')
+const transcriptInterimText = ref('')
+
+// Display text combining confirmed and interim results
+const displayTitle = computed(() => draft.value.title + titleInterimText.value)
+const displayTranscript = computed(() => draft.value.transcript + transcriptInterimText.value)
+
+// Speech recognition for title
+const titleSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ title: draft.value.title + text })
+      titleInterimText.value = ''
+    } else {
+      titleInterimText.value = text
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
+
+// Speech recognition for transcript
+const transcriptSpeech = useSpeechRecognition({
+  onTranscript: (text, isFinal) => {
+    if (isFinal) {
+      generationStore.updateDraft({ transcript: draft.value.transcript + text })
+      transcriptInterimText.value = ''
+    } else {
+      transcriptInterimText.value = text
+    }
+  },
+  onError: (error) => toastStore.error(error),
+  lang: 'zh-TW',
+})
 
 function adjustTextareaHeight() {
   const textarea = textareaRef.value
@@ -51,8 +88,20 @@ function handleTitleInput(value: string) {
   generationStore.updateDraft({ title: value })
 }
 
-function handleMicClick() {
-  toastStore.info('語音輸入功能開發中')
+function handleTitleMicClick() {
+  if (titleSpeech.isListening.value) {
+    titleSpeech.stopListening()
+  } else {
+    titleSpeech.startListening()
+  }
+}
+
+function handleTranscriptMicClick() {
+  if (transcriptSpeech.isListening.value) {
+    transcriptSpeech.stopListening()
+  } else {
+    transcriptSpeech.startListening()
+  }
 }
 
 async function handleGenerateTitle() {
@@ -83,22 +132,24 @@ async function handleGenerateTitle() {
     <!-- Title input with mic and AI buttons -->
     <div class="relative">
       <input
-        :value="draft.title"
+        :value="displayTitle"
         type="text"
         placeholder="輸入標題..."
-        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-500/20"
         @input="handleTitleInput(($event.target as HTMLInputElement).value)"
       />
       <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
         <button
-          class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
-          title="語音輸入"
-          @click="handleMicClick"
+          class="p-1.5 transition-colors"
+          :class="titleSpeech.isListening.value ? 'text-red-500' : 'text-stone-400 hover:text-stone-600'"
+          :title="titleSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTitleMicClick"
         >
-          <Mic class="w-4 h-4" />
+          <SoundWaveIndicator v-if="titleSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
         </button>
         <button
-          class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
+          class="p-1.5 text-stone-400 hover:text-stone-700 transition-colors"
           title="AI 生成標題"
           :disabled="isGeneratingTitle"
           @click="handleGenerateTitle"
@@ -116,22 +167,24 @@ async function handleGenerateTitle() {
     <div class="relative">
       <textarea
         ref="textareaRef"
-        :value="draft.transcript"
+        :value="displayTranscript"
         rows="1"
         placeholder="輸入逐字稿..."
-        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none overflow-hidden"
+        class="w-full px-3 py-2 pr-16 bg-white border border-stone-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-500/20 resize-none overflow-hidden"
         @input="handleInput(($event.target as HTMLTextAreaElement).value)"
       />
       <div class="absolute right-1.5 top-2 flex items-center gap-0.5">
         <button
-          class="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
-          title="語音輸入"
-          @click="handleMicClick"
+          class="p-1.5 transition-colors"
+          :class="transcriptSpeech.isListening.value ? 'text-red-500' : 'text-stone-400 hover:text-stone-600'"
+          :title="transcriptSpeech.isListening.value ? '停止錄音' : '語音輸入'"
+          @click="handleTranscriptMicClick"
         >
-          <Mic class="w-4 h-4" />
+          <SoundWaveIndicator v-if="transcriptSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
         </button>
         <button
-          class="p-1.5 text-stone-400 hover:text-purple-600 transition-colors"
+          class="p-1.5 text-stone-400 hover:text-stone-700 transition-colors"
           title="AI 生成"
           @click="showAIModal = true"
         >
@@ -170,7 +223,7 @@ async function handleGenerateTitle() {
                 v-model="aiTopic"
                 type="text"
                 placeholder="例如：如何提升工作效率"
-                class="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                class="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-500/20"
                 @keyup.enter="handleGenerateScript"
               />
             </div>
@@ -188,7 +241,7 @@ async function handleGenerateTitle() {
               取消
             </button>
             <button
-              class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 text-sm bg-stone-800 text-white rounded-lg hover:bg-stone-900 disabled:opacity-50 flex items-center gap-2"
               :disabled="!aiTopic.trim() || isGenerating"
               @click="handleGenerateScript"
             >

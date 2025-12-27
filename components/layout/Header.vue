@@ -32,7 +32,7 @@ async function handleLogin() {
     <div class="container mx-auto px-4">
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
-        <NuxtLink to="/" class="flex items-center gap-2">
+        <NuxtLink :to="authStore.user ? '/create' : '/'" class="flex items-center gap-2">
           <span class="text-xl font-bold gradient-text">DreaMake</span>
         </NuxtLink>
 

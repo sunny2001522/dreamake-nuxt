@@ -3,12 +3,37 @@ import type {
   AspectRatio,
   SubtitleFont,
   SubtitleBackground,
+  SubtitleStyleType,
   VideoModel,
   GenerationStage,
   GenerationRecord,
   SavedVoice,
   TimedSegment,
 } from '~/types'
+
+// 從 subtitleStyle 推斷字幕設定
+function migrateSubtitleStyle(style?: SubtitleStyleType): {
+  enabled: boolean
+  font: SubtitleFont
+  background: SubtitleBackground
+} {
+  if (!style || style === 'none') {
+    return { enabled: false, font: 'gothic', background: 'black' }
+  }
+  // gothic, ming -> 對應字體
+  if (style === 'gothic' || style === 'ming') {
+    return { enabled: true, font: style, background: 'black' }
+  }
+  // 舊版樣式映射 (white, black, etc.)
+  if (style === 'white') {
+    return { enabled: true, font: 'gothic', background: 'white' }
+  }
+  if (style === 'black') {
+    return { enabled: true, font: 'gothic', background: 'black' }
+  }
+  // 其他舊版樣式預設為 gothic + black
+  return { enabled: true, font: 'gothic', background: 'black' }
+}
 
 interface GenerationDraft {
   id: string
@@ -165,6 +190,9 @@ export const useGenerationStore = defineStore('generation', () => {
 
   // Load from history record
   function loadFromHistory(item: GenerationRecord) {
+    // 從 subtitleStyle 推斷字幕設定
+    const subtitleConfig = migrateSubtitleStyle(item.subtitleStyle)
+
     // Update draft with history item data
     draft.value = {
       ...draft.value,
@@ -173,8 +201,12 @@ export const useGenerationStore = defineStore('generation', () => {
       avatarPreview: item.avatarPreview,
       aspectRatio: item.aspectRatio,
       voicePreview: item.speakerId
-        ? { name: '已保存語音', speakerId: item.speakerId }
+        ? { name: item.voicePreview || '已保存的聲音', speakerId: item.speakerId }
         : undefined,
+      // 恢復字幕設定
+      subtitleEnabled: subtitleConfig.enabled,
+      subtitleFont: subtitleConfig.font,
+      subtitleBackground: subtitleConfig.background,
     }
 
     // Set generated result to show in preview
@@ -183,6 +215,10 @@ export const useGenerationStore = defineStore('generation', () => {
     // Reset generation state
     stage.value = 'complete'
     error.value = null
+
+    // 清空舊字幕（將由 create.vue 重新生成）
+    subtitleSegments.value = []
+    hasTimestamps.value = false
   }
 
   return {

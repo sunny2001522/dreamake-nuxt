@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import type { GenerationRecord } from '~/types'
 
+const emit = defineEmits<{
+  'item-selected': []
+}>()
+
 const authStore = useAuthStore()
 const router = useRouter()
+const generationStore = useGenerationStore()
 const { getAllVideos, deleteVideo } = useVideoStorage()
 
 const videos = ref<GenerationRecord[]>([])
@@ -159,32 +164,44 @@ async function handleDeleteItem(item: GenerationRecord) {
   }
 }
 
-// Handle item click - navigate to create page with item loaded
+// Handle item click - load to preview directly
 function handleItemClick(item: GenerationRecord) {
   if (isSelectMode.value) {
     toggleItemSelection(item.id)
   } else {
-    sessionStorage.setItem('loadHistoryItem', JSON.stringify(item))
+    generationStore.loadFromHistory(item)
+    emit('item-selected')
+
+    if (router.currentRoute.value.path !== '/create') {
+      router.push('/create')
+    }
+  }
+}
+
+// Handle regenerate - 只載入預覽，不自動生成
+function handleRegenerate(item: GenerationRecord) {
+  generationStore.loadFromHistory(item)
+  emit('item-selected')
+
+  if (router.currentRoute.value.path !== '/create') {
     router.push('/create')
   }
 }
 
-// Handle regenerate - navigate to create page and trigger generation
-function handleRegenerate(item: GenerationRecord) {
-  sessionStorage.setItem('loadHistoryItem', JSON.stringify(item))
-  sessionStorage.setItem('triggerRegenerate', 'true')
-  router.push('/create')
-}
-
-// Download single item
+// Download single item (使用後端代理避免 CORS)
 async function downloadItem(item: GenerationRecord) {
   const url = item.videoUrl || item.audioUrl
   if (!url) return
 
   try {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    const downloadUrl = URL.createObjectURL(blob)
+    // 使用後端代理 API 避免 CORS 問題
+    const response = await $fetch('/api/proxy-download', {
+      method: 'POST',
+      body: { url },
+      responseType: 'blob',
+    })
+
+    const downloadUrl = URL.createObjectURL(response as Blob)
     const a = document.createElement('a')
     a.href = downloadUrl
     a.download = `${item.title || 'video'}-${Date.now()}.${item.videoUrl ? 'mp4' : 'mp3'}`

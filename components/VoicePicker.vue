@@ -430,7 +430,7 @@ onUnmounted(() => {
 <template>
   <div class="card p-4">
     <div class="flex items-center justify-between mb-3">
-      <label class="text-sm font-medium text-stone-700">2. 聲音</label>
+      <label class="text-sm font-medium text-stone-700">聲音</label>
       <span class="text-xs text-stone-400">選擇要模仿的人聲</span>
     </div>
 
@@ -446,9 +446,9 @@ onUnmounted(() => {
     <!-- Selected Voice Preview -->
     <div
       v-if="draft.voicePreview"
-      class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl"
+      class="flex items-center gap-3 p-3 bg-stone-100 rounded-xl"
     >
-      <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
+      <div class="w-10 h-10 bg-stone-700 rounded-full flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
         </svg>
@@ -459,7 +459,7 @@ onUnmounted(() => {
       </div>
       <div class="flex items-center gap-2">
         <button
-          class="p-2 text-stone-400 hover:text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+          class="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
           @click="handleClick"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -480,13 +480,15 @@ onUnmounted(() => {
     <!-- Empty State Button -->
     <button
       v-else
-      class="w-full p-6 border-2 border-dashed border-stone-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-colors text-center"
+      class="w-full p-6 border-2 border-dashed border-stone-200 rounded-xl hover:border-stone-400 hover:bg-stone-50 transition-colors text-center"
       @click="handleClick"
     >
       <svg class="w-8 h-8 mx-auto mb-2 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
       </svg>
-      <p class="text-sm text-stone-500">選擇或錄製語音</p>
+      <p class="text-sm text-stone-500">
+        {{ savedVoices.length > 0 ? savedVoices[0].name : '選擇或錄製語音' }}
+      </p>
     </button>
 
     <!-- Modal -->
@@ -561,7 +563,7 @@ onUnmounted(() => {
             <!-- History Tab -->
             <div v-if="modalTab === 'history'">
               <div v-if="isLoadingVoices" class="flex items-center justify-center py-12">
-                <svg class="animate-spin w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-8 h-8 text-stone-600" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -579,7 +581,7 @@ onUnmounted(() => {
                   :key="voice.supabaseId || voice.id"
                   class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all group"
                   :class="draft.voicePreview?.speakerId === voice.speakerId
-                    ? 'bg-purple-100 border-2 border-purple-500'
+                    ? 'bg-stone-200 border-2 border-stone-600'
                     : 'bg-stone-50 hover:bg-stone-100 border-2 border-transparent'"
                   @click="handleSelectVoice(voice)"
                 >
@@ -590,8 +592,8 @@ onUnmounted(() => {
                       !voice.audioUrl
                         ? 'bg-stone-300 cursor-not-allowed'
                         : previewingVoiceId === (voice.supabaseId || String(voice.id))
-                          ? 'bg-purple-600 hover:bg-purple-700'
-                          : 'bg-purple-500 hover:bg-purple-600'
+                          ? 'bg-stone-800 hover:bg-stone-900'
+                          : 'bg-stone-700 hover:bg-stone-800'
                     ]"
                     :disabled="!voice.audioUrl"
                     @click="voice.audioUrl && handlePreviewVoice($event, voice)"
@@ -704,7 +706,7 @@ onUnmounted(() => {
                 class="px-8 py-4 rounded-full font-medium transition-all flex items-center gap-3"
                 :class="isRecording
                   ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'bg-purple-500 text-white hover:bg-purple-600'"
+                  : 'bg-stone-800 text-white hover:bg-stone-900'"
                 @click="isRecording ? stopRecording() : startRecording()"
               >
                 <svg v-if="isRecording" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -718,7 +720,7 @@ onUnmounted(() => {
 
               <!-- Processing state -->
               <div v-if="isProcessing" class="text-center">
-                <svg class="animate-spin w-8 h-8 text-purple-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-8 h-8 text-stone-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -730,7 +732,7 @@ onUnmounted(() => {
             <div v-else-if="modalTab === 'upload'" class="space-y-6">
               <!-- Processing overlay -->
               <div v-if="isProcessing || isCloning" class="flex flex-col items-center justify-center py-12">
-                <svg class="animate-spin w-12 h-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-12 h-12 text-stone-600 mb-4" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -744,7 +746,7 @@ onUnmounted(() => {
               <div
                 v-else
                 class="border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer"
-                :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-stone-300 hover:border-purple-400'"
+                :class="isDragging ? 'border-stone-500 bg-stone-50' : 'border-stone-300 hover:border-stone-400'"
                 @dragover="handleDragOver"
                 @dragleave="handleDragLeave"
                 @drop="handleDrop"

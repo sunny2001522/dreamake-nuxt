@@ -31,6 +31,7 @@ function setVideoModel(model: VideoModel) {
 
 // Generation composable
 const videoGeneration = useVideoGeneration()
+const { uploadVideoToStorage, createVideo } = useVideoStorage()
 
 // Check if generation can proceed
 const canGenerate = computed(() => {
@@ -147,7 +148,7 @@ async function handleGenerateVideo() {
       }
     )
 
-    // Create completed record
+    // Create completed record with external URL first (for immediate preview)
     const record: GenerationRecord = {
       id: Date.now().toString(),
       transcript: draft.value.transcript,
@@ -165,6 +166,44 @@ async function handleGenerateVideo() {
     generationStore.setResult(record)
     generationStore.setStage('complete')
     toastStore.success('影片生成完成！')
+
+    // Background upload to Supabase Storage (non-blocking)
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    uploadVideoToStorage(videoResult.videoUrl, userId)
+      .then(async (supabaseVideoUrl) => {
+        // Save to database with permanent Supabase URL
+        await createVideo({
+          user_id: userId,
+          transcript: draft.value.transcript,
+          video_url: supabaseVideoUrl,
+          audio_url: result.audioUrl,
+          aspect_ratio: draft.value.aspectRatio,
+          status: 'completed',
+          speaker_id: speakerId,
+          title: draft.value.title || null,
+          avatar_preview: avatarUrl,
+          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+          voice_preview: draft.value.voicePreview?.name || null,
+        })
+        toastStore.success('影片已儲存到雲端')
+      })
+      .catch((err) => {
+        console.error('Failed to upload video to storage:', err)
+        // Fallback: save with external URL (may expire)
+        createVideo({
+          user_id: userId,
+          transcript: draft.value.transcript,
+          video_url: videoResult.videoUrl,
+          audio_url: result.audioUrl,
+          aspect_ratio: draft.value.aspectRatio,
+          status: 'completed',
+          speaker_id: speakerId,
+          title: draft.value.title || null,
+          avatar_preview: avatarUrl,
+          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+          voice_preview: draft.value.voicePreview?.name || null,
+        }).catch((e) => console.error('Failed to save video record:', e))
+      })
   } catch (err: any) {
     console.error('Video generation failed:', err)
     generationStore.setError(err.message || '影片生成失敗')
@@ -215,6 +254,42 @@ async function handleContinueToVideo() {
     generationStore.setResult(record)
     generationStore.setStage('complete')
     toastStore.success('影片生成完成！')
+
+    // Background upload to Supabase Storage (non-blocking)
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    uploadVideoToStorage(videoResult.videoUrl, userId)
+      .then(async (supabaseVideoUrl) => {
+        await createVideo({
+          user_id: userId,
+          transcript: draft.value.transcript,
+          video_url: supabaseVideoUrl,
+          audio_url: existingResult.audioUrl || null,
+          aspect_ratio: draft.value.aspectRatio,
+          status: 'completed',
+          speaker_id: existingResult.speakerId || null,
+          title: draft.value.title || null,
+          avatar_preview: draft.value.avatarPreview || null,
+          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+          voice_preview: draft.value.voicePreview?.name || null,
+        })
+        toastStore.success('影片已儲存到雲端')
+      })
+      .catch((err) => {
+        console.error('Failed to upload video to storage:', err)
+        createVideo({
+          user_id: userId,
+          transcript: draft.value.transcript,
+          video_url: videoResult.videoUrl,
+          audio_url: existingResult.audioUrl || null,
+          aspect_ratio: draft.value.aspectRatio,
+          status: 'completed',
+          speaker_id: existingResult.speakerId || null,
+          title: draft.value.title || null,
+          avatar_preview: draft.value.avatarPreview || null,
+          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+          voice_preview: draft.value.voicePreview?.name || null,
+        }).catch((e) => console.error('Failed to save video record:', e))
+      })
   } catch (err: any) {
     console.error('Video generation failed:', err)
     generationStore.setError(err.message || '影片生成失敗')

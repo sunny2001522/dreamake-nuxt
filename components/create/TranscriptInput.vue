@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SuggestedTopic, MediaPlatform, DbPersona } from '~/types'
 import { Mic, Sparkles } from 'lucide-vue-next'
+import SoundWaveIndicator from '~/components/common/SoundWaveIndicator.vue'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -387,11 +388,22 @@ function handleTitleInput(value: string) {
   generationStore.updateDraft({ title: value })
 }
 
+// Interim text for real-time display
+const titleInterimText = ref('')
+const transcriptInterimText = ref('')
+
+// Display text combining confirmed and interim results
+const displayTitle = computed(() => draft.value.title + titleInterimText.value)
+const displayTranscript = computed(() => draft.value.transcript + transcriptInterimText.value)
+
 // Speech recognition for title
 const titleSpeech = useSpeechRecognition({
   onTranscript: (text, isFinal) => {
     if (isFinal) {
       generationStore.updateDraft({ title: draft.value.title + text })
+      titleInterimText.value = ''
+    } else {
+      titleInterimText.value = text
     }
   },
   onError: (error) => toastStore.error(error),
@@ -403,6 +415,9 @@ const transcriptSpeech = useSpeechRecognition({
   onTranscript: (text, isFinal) => {
     if (isFinal) {
       generationStore.updateDraft({ transcript: draft.value.transcript + text })
+      transcriptInterimText.value = ''
+    } else {
+      transcriptInterimText.value = text
     }
   },
   onError: (error) => toastStore.error(error),
@@ -511,22 +526,23 @@ function handleTranscriptMicClick() {
     <!-- Title input with mic and AI buttons -->
     <div class="relative mb-2">
       <input
-        :value="draft.title"
+        :value="displayTitle"
         type="text"
         placeholder="輸入標題..."
-        class="w-full px-3 py-2 pr-16 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+        class="w-full px-3 py-2 pr-24 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
         @input="handleTitleInput(($event.target as HTMLInputElement).value)"
       />
       <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
         <button
           class="p-1.5 transition-colors"
           :class="titleSpeech.isListening.value
-            ? 'text-red-500 animate-pulse'
+            ? 'text-red-500'
             : 'text-stone-400 hover:text-stone-600'"
           :title="titleSpeech.isListening.value ? '停止錄音' : '語音輸入'"
           @click="handleTitleMicClick"
         >
-          <Mic class="w-4 h-4" />
+          <SoundWaveIndicator v-if="titleSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
         </button>
         <button
           class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
@@ -542,7 +558,7 @@ function handleTranscriptMicClick() {
     <!-- Transcript textarea with mic and AI buttons -->
     <div class="relative">
       <textarea
-        :value="draft.transcript"
+        :value="displayTranscript"
         placeholder="輸入逐字稿..."
         class="w-full h-20 p-3 pr-24 text-sm text-stone-800 bg-stone-50 border border-stone-200 rounded-xl resize-none focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
         @input="handleInput(($event.target as HTMLTextAreaElement).value)"
@@ -551,12 +567,13 @@ function handleTranscriptMicClick() {
         <button
           class="p-1.5 transition-colors"
           :class="transcriptSpeech.isListening.value
-            ? 'text-red-500 animate-pulse'
+            ? 'text-red-500'
             : 'text-stone-400 hover:text-stone-600'"
           :title="transcriptSpeech.isListening.value ? '停止錄音' : '語音輸入'"
           @click="handleTranscriptMicClick"
         >
-          <Mic class="w-4 h-4" />
+          <SoundWaveIndicator v-if="transcriptSpeech.isListening.value" :active="true" size="sm" color="red" />
+          <Mic v-else class="w-4 h-4" />
         </button>
         <button
           class="px-2 py-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"

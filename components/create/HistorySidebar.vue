@@ -21,6 +21,6 @@ const isOpen = computed({
     title="歷史紀錄"
     width="lg"
   >
-    <HistoryPage />
+    <HistoryPage @item-selected="isOpen = false" />
   </CommonSlideDrawer>
 </template>

@@ -7,6 +7,24 @@ export const useVideoStorage = () => {
   const supabase = useSupabaseClient<any>()
 
   /**
+   * Upload video from external URL to Supabase Storage
+   * This creates a permanent URL that won't expire
+   * Uses server-side API with admin client to bypass RLS for CMoney OIDC users
+   */
+  const uploadVideoToStorage = async (
+    externalUrl: string,
+    userId: string
+  ): Promise<string> => {
+    // Use server-side API to upload (bypasses RLS)
+    const result = await $fetch('/api/video/upload', {
+      method: 'POST',
+      body: { externalUrl, userId },
+    })
+
+    return result.publicUrl
+  }
+
+  /**
    * Get all videos for a user, sorted by created_at (most recent first)
    */
   const getAllVideos = async (userId: string): Promise<DbVideo[]> => {
@@ -113,6 +131,7 @@ export const useVideoStorage = () => {
   }
 
   return {
+    uploadVideoToStorage,
     getAllVideos,
     getVideoById,
     getVideosByStatus,
