@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, Download, Loader2, VolumeX } from 'lucide-vue-n
 
 const generationStore = useGenerationStore()
 const toastStore = useToastStore()
-const { draft, generatedResult, subtitleSegments, hasTimestamps, isLoadingSubtitles } = storeToRefs(generationStore)
+const { draft, generatedResult, subtitleSegments, hasTimestamps, isLoadingSubtitles, isLoadingFromHistory } = storeToRefs(generationStore)
 
 // FFmpeg for subtitle burning
 const ffmpeg = useFFmpeg()
@@ -143,7 +143,10 @@ function handleUnmute() {
   }
 }
 
-// Watch for new media and auto-play
+// Track if we should auto-play after loading
+const shouldAutoPlayAfterLoad = ref(false)
+
+// Watch for new media - prepare for auto-play but don't play yet if loading from history
 watch(
   () => generatedResult.value,
   async (newResult, oldResult) => {
@@ -161,15 +164,21 @@ watch(
         isMuted.value = false
         media.muted = false
 
-        const playWhenReady = async () => {
-          await tryAutoPlay(media)
-          media.removeEventListener('canplay', playWhenReady)
-        }
-
-        if (media.readyState >= 3) {
-          await tryAutoPlay(media)
+        // 如果正在從歷史載入，等待 loading 消失後再播放
+        if (isLoadingFromHistory.value) {
+          shouldAutoPlayAfterLoad.value = true
         } else {
-          media.addEventListener('canplay', playWhenReady)
+          // 不是從歷史載入，直接播放
+          const playWhenReady = async () => {
+            await tryAutoPlay(media)
+            media.removeEventListener('canplay', playWhenReady)
+          }
+
+          if (media.readyState >= 3) {
+            await tryAutoPlay(media)
+          } else {
+            media.addEventListener('canplay', playWhenReady)
+          }
         }
       }
     }
@@ -231,9 +240,21 @@ function handleSeek(event: Event) {
 }
 
 // Media event handlers
-function onLoadedMetadata(event: Event) {
+async function onLoadedMetadata(event: Event) {
   const media = event.target as HTMLMediaElement
   duration.value = media.duration
+
+  // 媒體載入完成，清除歷史載入狀態
+  if (isLoadingFromHistory.value) {
+    generationStore.clearHistoryLoading()
+
+    // 如果需要在 loading 消失後自動播放
+    if (shouldAutoPlayAfterLoad.value) {
+      shouldAutoPlayAfterLoad.value = false
+      await nextTick() // 等待 loading overlay 消失
+      await tryAutoPlay(media)
+    }
+  }
 }
 
 function onTimeUpdate(event: Event) {
@@ -668,6 +689,17 @@ async function downloadWithSubtitles(videoUrl: string) {
           <p class="text-sm">選擇頭像開始預覽</p>
         </div>
       </template>
+
+      <!-- Loading from History Overlay -->
+      <div
+        v-if="isLoadingFromHistory"
+        class="absolute inset-0 bg-black/60 flex items-center justify-center z-30"
+      >
+        <div class="flex flex-col items-center gap-3">
+          <Loader2 class="w-8 h-8 text-white animate-spin" />
+          <span class="text-white text-sm">載入中...</span>
+        </div>
+      </div>
 
       <!-- Loading Subtitles Overlay -->
       <div
