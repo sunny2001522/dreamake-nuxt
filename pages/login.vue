@@ -23,7 +23,7 @@ onMounted(async () => {
   } catch (err) {
     console.error('Login callback failed:', err)
     // Redirect to auth page with error instead of retrying login (avoid infinite loop)
-    await navigateTo('/auth?error=login_failed')
+    await navigateTo('/?error=login_failed')
   }
 })
 </script>

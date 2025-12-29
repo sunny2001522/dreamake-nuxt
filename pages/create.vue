@@ -33,7 +33,7 @@ watch(
   }
 )
 
-// 監聽歷史載入，自動生成字幕
+// 監聯歷史載入，自動生成字幕並滾動到預覽區域
 watch(
   () => generationStore.generatedResult,
   async (newResult) => {
@@ -47,6 +47,12 @@ watch(
       console.log('Loading history item, generating subtitles...')
       await generateSubtitles(newResult.audioUrl, newResult.transcript)
     }
+
+    // 從歷史載入時滾動到預覽區域
+    if (newResult && generationStore.isLoadingFromHistory) {
+      await nextTick()
+      previewRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
   },
   { immediate: false }
 )
@@ -59,6 +65,9 @@ const showSettingsModal = ref(false)
 
 // Desktop history sidebar
 const showHistorySidebar = ref(false)
+
+// Preview area ref for scroll
+const previewRef = ref<HTMLElement | null>(null)
 
 // Ref to ImageUploader and VoicePicker for direct modal access
 const imageUploaderRef = ref<{ openModal: () => void } | null>(null)
@@ -187,7 +196,8 @@ async function handleGenerateVoice() {
 
   if (!authStore.user) {
     toastStore.error('請先登入帳號以使用生成功能')
-    router.push('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager as any, '/create')
     return
   }
 
@@ -237,7 +247,8 @@ async function handleGenerateVideo() {
 
   if (!authStore.user) {
     toastStore.error('請先登入帳號以使用生成功能')
-    router.push('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager as any, '/create')
     return
   }
 
@@ -313,7 +324,7 @@ async function handleGenerateVideo() {
   <div class="lg:hidden h-[calc(100vh-64px)] flex flex-col overflow-hidden">
     <div class="flex-1 flex flex-col min-h-0 px-4 py-2 gap-2 pb-20">
       <!-- Preview Area (Flexible) -->
-      <div class="relative flex-1 min-h-0 flex items-center justify-center">
+      <div ref="previewRef" class="relative flex-1 min-h-0 flex items-center justify-center">
         <CreateVideoPreview class="w-full h-full" />
         <!-- History button -->
         <NuxtLink

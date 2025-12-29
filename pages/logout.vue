@@ -11,7 +11,7 @@ onMounted(async () => {
     await authStore.logoutCallback($manager)
   } catch (err) {
     console.error('Logout failed:', err)
-    await authStore.logout($manager, '/auth')
+    await authStore.logout($manager, '/')
   }
 })
 </script>
