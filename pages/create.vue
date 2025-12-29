@@ -187,7 +187,8 @@ async function handleGenerateVoice() {
 
   if (!authStore.user) {
     toastStore.error('請先登入帳號以使用生成功能')
-    router.push('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager as any, '/create')
     return
   }
 
@@ -237,7 +238,8 @@ async function handleGenerateVideo() {
 
   if (!authStore.user) {
     toastStore.error('請先登入帳號以使用生成功能')
-    router.push('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager as any, '/create')
     return
   }
 

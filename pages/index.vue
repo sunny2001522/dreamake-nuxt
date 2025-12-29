@@ -6,11 +6,12 @@ definePageMeta({
 const authStore = useAuthStore()
 const router = useRouter()
 
-function handleStartClick() {
+async function handleStartClick() {
   if (authStore.user) {
     navigateTo('/create')
   } else {
-    navigateTo('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager, '/create')
   }
 }
 </script>
