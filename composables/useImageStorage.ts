@@ -2,23 +2,19 @@ import type { DbImage, DbImageInsert, DbImageUpdate } from '~/types'
 
 /**
  * Composable for managing image storage in Supabase
+ * Uses server-side API to bypass RLS for CMoney OIDC users
  */
 export const useImageStorage = () => {
   const supabase = useSupabaseClient<any>()
 
   /**
    * Get all images for a user, sorted by last_used_at (most recent first)
+   * Uses server API to bypass RLS
    */
   const getAllImages = async (userId: string): Promise<DbImage[]> => {
-    const { data, error } = await supabase
-      .from('images')
-      .select('*')
-      .eq('user_id', userId)
-      .order('last_used_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Failed to fetch images: ${error.message}`)
-    }
+    const data = await $fetch<DbImage[]>('/api/images', {
+      query: { userId },
+    })
 
     return data || []
   }
@@ -148,39 +144,12 @@ export const useImageStorage = () => {
 
   /**
    * Delete an image (both from Storage and database)
+   * Uses server API to bypass RLS
    */
   const deleteImage = async (id: string, userId: string): Promise<void> => {
-    // Get image to find storage path
-    const image = await getImageById(id)
-
-    if (image) {
-      // Extract file path from URL
-      try {
-        const url = new URL(image.image_url)
-        const pathParts = url.pathname.split('/')
-        const filePath = pathParts.slice(-2).join('/')
-
-        // Delete from Storage
-        await supabase.storage.from('avatars').remove([filePath])
-
-        // Delete thumbnail if exists
-        if (image.thumbnail_url) {
-          const thumbUrl = new URL(image.thumbnail_url)
-          const thumbPathParts = thumbUrl.pathname.split('/')
-          const thumbPath = thumbPathParts.slice(-2).join('/')
-          await supabase.storage.from('avatars').remove([thumbPath])
-        }
-      } catch {
-        // URL parsing failed, continue with database deletion
-      }
-    }
-
-    // Delete from database
-    const { error } = await supabase.from('images').delete().eq('id', id)
-
-    if (error) {
-      throw new Error(`Failed to delete image: ${error.message}`)
-    }
+    await $fetch(`/api/images/${id}`, {
+      method: 'DELETE',
+    })
   }
 
   return {

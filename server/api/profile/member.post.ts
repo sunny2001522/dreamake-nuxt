@@ -15,7 +15,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const PROFILE_DOMAIN = process.env.VITE_PROFILE_SERVICE_DOMAIN
+  const config = useRuntimeConfig()
+  const PROFILE_DOMAIN = config.public.profileServiceDomain
 
   if (!PROFILE_DOMAIN) {
     throw createError({
