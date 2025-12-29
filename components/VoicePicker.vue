@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SavedVoice } from '~/types'
+import { ensureCompatibleFormat } from '~/utils/audioConverter'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -281,10 +282,26 @@ async function cloneVoice(file: File, name: string) {
   try {
     isCloning.value = true
     cloningVoiceName.value = name
+    uploadProgress.value = '壓縮音檔中...'
+
+    // Convert audio to compressed WAV format for API compatibility
+    let processedFile: File
+    try {
+      processedFile = await ensureCompatibleFormat(file)
+      console.log('Audio processed:', {
+        original: { name: file.name, size: file.size },
+        processed: { name: processedFile.name, size: processedFile.size },
+      })
+    } catch (conversionError) {
+      console.error('Audio conversion failed:', conversionError)
+      toastStore.error('音檔轉換失敗', '請嘗試使用 MP3 或 WAV 格式的音檔')
+      return
+    }
+
     uploadProgress.value = '克隆語音中...'
 
     const formData = new FormData()
-    formData.append('audio', file)
+    formData.append('audio', processedFile)
     formData.append('name', name)
 
     const response = await $fetch<{ speakerId: string }>('/api/voice/clone', {
