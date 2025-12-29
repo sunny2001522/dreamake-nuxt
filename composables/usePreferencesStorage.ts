@@ -2,141 +2,123 @@ import type { DbUserPreferences, SubtitleStyleType } from '~/types'
 
 /**
  * Composable for managing user preferences in Supabase
+ * Uses server-side API to bypass RLS for CMoney OIDC users
  */
 export const usePreferencesStorage = () => {
-  const supabase = useSupabaseClient<any>()
-
   /**
    * Get user preferences from Supabase
+   * Uses server API to bypass RLS
    */
   const getUserPreferences = async (userId: string): Promise<DbUserPreferences | null> => {
-    const { data, error } = await supabase
-      .from('user_preferences')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
-
-    if (error) {
-      // PGRST116 means no rows found - not an error, just no preferences yet
-      if (error.code === 'PGRST116') {
+    try {
+      const data = await $fetch<DbUserPreferences | null>('/api/preferences', {
+        query: { userId },
+      })
+      return data
+    } catch (error: any) {
+      // Handle 404 or empty response as null
+      if (error.statusCode === 404) {
         return null
       }
-      throw new Error(`Failed to fetch user preferences: ${error.message}`)
+      throw error
     }
-
-    return data
   }
 
   /**
    * Upsert user preferences (insert or update)
+   * Uses server API to bypass RLS
    */
   const upsertUserPreferences = async (
     preferences: Partial<DbUserPreferences> & { user_id: string }
   ): Promise<DbUserPreferences> => {
-    const { data, error } = await supabase
-      .from('user_preferences')
-      .upsert(preferences, {
-        onConflict: 'user_id',
-      })
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Failed to upsert user preferences: ${error.message}`)
-    }
-
+    const data = await $fetch<DbUserPreferences>('/api/preferences', {
+      method: 'POST',
+      body: preferences,
+    })
     return data
   }
 
   /**
    * Update persona preference
+   * Uses server API to bypass RLS
    */
   const updatePersonaPreference = async (
     userId: string,
     personaId: string | null
   ): Promise<void> => {
-    const { error } = await supabase
-      .from('user_preferences')
-      .upsert(
-        { user_id: userId, persona_id: personaId },
-        { onConflict: 'user_id' }
-      )
-
-    if (error) {
+    try {
+      await $fetch('/api/preferences', {
+        method: 'POST',
+        body: { user_id: userId, persona_id: personaId },
+      })
+    } catch (error: any) {
       // Ignore foreign key constraint errors
-      if (error.message.includes('foreign key constraint') || error.code === '23503') {
+      if (error.data?.warning) {
         console.warn('Persona ID not found in Supabase, skipping preference sync')
         return
       }
-      throw new Error(`Failed to update persona preference: ${error.message}`)
+      throw error
     }
   }
 
   /**
    * Update voice preference
+   * Uses server API to bypass RLS
    */
   const updateVoicePreference = async (
     userId: string,
     voiceId: string | null
   ): Promise<void> => {
-    const { error } = await supabase
-      .from('user_preferences')
-      .upsert(
-        { user_id: userId, voice_id: voiceId },
-        { onConflict: 'user_id' }
-      )
-
-    if (error) {
+    try {
+      await $fetch('/api/preferences', {
+        method: 'POST',
+        body: { user_id: userId, voice_id: voiceId },
+      })
+    } catch (error: any) {
       // Ignore foreign key constraint errors (local-only voice)
-      if (error.message.includes('foreign key constraint') || error.code === '23503') {
+      if (error.data?.warning) {
         console.warn('Voice ID not found in Supabase, skipping preference sync')
         return
       }
-      throw new Error(`Failed to update voice preference: ${error.message}`)
+      throw error
     }
   }
 
   /**
    * Update image preference
+   * Uses server API to bypass RLS
    */
   const updateImagePreference = async (
     userId: string,
     imageId: string | null
   ): Promise<void> => {
-    const { error } = await supabase
-      .from('user_preferences')
-      .upsert(
-        { user_id: userId, image_id: imageId },
-        { onConflict: 'user_id' }
-      )
-
-    if (error) {
+    try {
+      await $fetch('/api/preferences', {
+        method: 'POST',
+        body: { user_id: userId, image_id: imageId },
+      })
+    } catch (error: any) {
       // Ignore foreign key constraint errors (local-only image)
-      if (error.message.includes('foreign key constraint') || error.code === '23503') {
+      if (error.data?.warning) {
         console.warn('Image ID not found in Supabase, skipping preference sync')
         return
       }
-      throw new Error(`Failed to update image preference: ${error.message}`)
+      throw error
     }
   }
 
   /**
    * Update subtitle style preference
+   * Uses server API to bypass RLS
    */
   const updateSubtitleStylePreference = async (
     userId: string,
     subtitleStyle: SubtitleStyleType
   ): Promise<void> => {
-    const { error } = await supabase
-      .from('user_preferences')
-      .upsert(
-        { user_id: userId, subtitle_style: subtitleStyle },
-        { onConflict: 'user_id' }
-      )
-
-    if (error) {
-      throw new Error(`Failed to update subtitle style: ${error.message}`)
-    }
+    await $fetch('/api/preferences', {
+      method: 'POST',
+      body: { user_id: userId, subtitle_style: subtitleStyle },
+    })
   }
 
   return {

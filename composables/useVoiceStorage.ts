@@ -2,23 +2,19 @@ import type { DbVoice, DbVoiceInsert, DbVoiceUpdate } from '~/types'
 
 /**
  * Composable for managing voice storage in Supabase
+ * Uses server-side API to bypass RLS for CMoney OIDC users
  */
 export const useVoiceStorage = () => {
   const supabase = useSupabaseClient<any>()
 
   /**
    * Get all voices for a user, sorted by last_used_at (most recent first)
+   * Uses server API to bypass RLS
    */
   const getAllVoices = async (userId: string): Promise<DbVoice[]> => {
-    const { data, error } = await supabase
-      .from('voices')
-      .select('*')
-      .eq('user_id', userId)
-      .order('last_used_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Failed to fetch voices: ${error.message}`)
-    }
+    const data = await $fetch<DbVoice[]>('/api/voices', {
+      query: { userId },
+    })
 
     return data || []
   }
@@ -180,30 +176,12 @@ export const useVoiceStorage = () => {
 
   /**
    * Delete a voice (both from Storage and database)
+   * Uses server API to bypass RLS
    */
   const deleteVoice = async (id: string): Promise<void> => {
-    // Get voice to find storage path
-    const voice = await getVoiceById(id)
-
-    if (voice && voice.audio_url) {
-      try {
-        const url = new URL(voice.audio_url)
-        const pathParts = url.pathname.split('/')
-        const filePath = pathParts.slice(-2).join('/')
-
-        // Delete from Storage
-        await supabase.storage.from('voices').remove([filePath])
-      } catch {
-        // URL parsing failed, continue with database deletion
-      }
-    }
-
-    // Delete from database
-    const { error } = await supabase.from('voices').delete().eq('id', id)
-
-    if (error) {
-      throw new Error(`Failed to delete voice: ${error.message}`)
-    }
+    await $fetch(`/api/voices/${id}`, {
+      method: 'DELETE',
+    })
   }
 
   return {

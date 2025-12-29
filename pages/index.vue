@@ -6,11 +6,12 @@ definePageMeta({
 const authStore = useAuthStore()
 const router = useRouter()
 
-function handleStartClick() {
+async function handleStartClick() {
   if (authStore.user) {
     navigateTo('/create')
   } else {
-    navigateTo('/auth')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager, '/create')
   }
 }
 </script>
@@ -21,10 +22,22 @@ function handleStartClick() {
     <LandingHeroSection @start="handleStartClick" />
 
     <!-- Feature Cards -->
-    <LandingFeatureCards />
+    <LandingFeatureCards @start="handleStartClick" />
+
+    <!-- Steps Section -->
+    <LandingStepsSection />
 
     <!-- Demo Section -->
     <LandingDemoSection />
+
+    <!-- Use Cases Section -->
+    <LandingUseCasesSection />
+
+    <!-- Stats Section -->
+    <LandingStatsSection />
+
+    <!-- Security Section -->
+    <LandingSecuritySection />
 
     <!-- CTA Section -->
     <LandingCTASection @start="handleStartClick" />

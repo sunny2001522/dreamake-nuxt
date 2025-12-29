@@ -87,6 +87,9 @@ export const useGenerationStore = defineStore('generation', () => {
   const hasTimestamps = ref(false)
   const isLoadingSubtitles = ref(false)
 
+  // History loading state
+  const isLoadingFromHistory = ref(false)
+
   // Debounced save
   let saveTimeout: ReturnType<typeof setTimeout> | null = null
   const DEBOUNCE_MS = 500
@@ -190,6 +193,9 @@ export const useGenerationStore = defineStore('generation', () => {
 
   // Load from history record
   function loadFromHistory(item: GenerationRecord) {
+    // 開始載入
+    isLoadingFromHistory.value = true
+
     // 從 subtitleStyle 推斷字幕設定
     const subtitleConfig = migrateSubtitleStyle(item.subtitleStyle)
 
@@ -219,6 +225,11 @@ export const useGenerationStore = defineStore('generation', () => {
     // 清空舊字幕（將由 create.vue 重新生成）
     subtitleSegments.value = []
     hasTimestamps.value = false
+  }
+
+  // Clear history loading state (called when media is ready)
+  function clearHistoryLoading() {
+    isLoadingFromHistory.value = false
   }
 
   return {
@@ -253,5 +264,7 @@ export const useGenerationStore = defineStore('generation', () => {
 
     // History
     loadFromHistory,
+    isLoadingFromHistory,
+    clearHistoryLoading,
   }
 })
