@@ -1,28 +1,38 @@
 <script setup lang="ts">
-const features = [
+import { Mic, Image, FileText, Clapperboard, type LucideIcon } from 'lucide-vue-next'
+
+interface Feature {
+  icon: LucideIcon
+  title: string
+  description: string
+  cta: string
+  highlight: string
+}
+
+const features: Feature[] = [
   {
-    icon: '🎤',
+    icon: Mic,
     title: '聲音克隆',
     description: '打造完美複製個人聲音的 AI 分身，保留您獨特的說話風格。支援多種語言與情感表達。',
     cta: '立即克隆您的聲音',
     highlight: '140+ 種語言',
   },
   {
-    icon: '🖼️',
+    icon: Image,
     title: 'AI 虛擬人物',
     description: '上傳照片即刻生成逼真 AI 頭像，讓您的分身開口說話，自然流暢。',
     cta: '立即創建虛擬人物',
-    highlight: '1500+ 虛擬人物',
+    highlight: '',
   },
   {
-    icon: '📝',
+    icon: FileText,
     title: 'AI 腳本生成',
     description: '輸入主題，AI 根據您的風格自動生成專業影片腳本，節省創作時間。',
     cta: '立即生成腳本',
     highlight: '智能創作',
   },
   {
-    icon: '🎬',
+    icon: Clapperboard,
     title: '自動字幕',
     description: '自動生成精確同步的多語言字幕，多種樣式可選，提升影片專業度。',
     cta: '立即添加字幕',
@@ -55,7 +65,7 @@ const emit = defineEmits<{
           class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-100 hover:shadow-xl hover:border-purple-200 transition-all duration-300"
         >
           <div class="flex items-start gap-4">
-            <div class="text-5xl">{{ feature.icon }}</div>
+            <component :is="feature.icon" class="w-12 h-12 text-purple-500 flex-shrink-0" />
             <div class="flex-1">
               <div class="flex items-center gap-3 mb-2">
                 <h3 class="text-xl font-bold text-stone-800">
@@ -68,13 +78,7 @@ const emit = defineEmits<{
               <p class="text-stone-600 mb-4 leading-relaxed">
                 {{ feature.description }}
               </p>
-              <button
-                class="text-purple-600 font-medium hover:text-purple-700 transition-colors flex items-center gap-1 group-hover:gap-2"
-                @click="emit('start')"
-              >
-                {{ feature.cta }}
-                <span class="transition-transform group-hover:translate-x-1">→</span>
-              </button>
+              
             </div>
           </div>
         </div>

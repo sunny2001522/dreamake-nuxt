@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Facebook, Instagram } from 'lucide-vue-next'
+
 const currentYear = new Date().getFullYear()
 
 const productLinks = [
@@ -41,10 +43,10 @@ const companyLinks = [
               <span class="text-xl">𝕏</span>
             </a>
             <a href="#" class="text-stone-500 hover:text-white transition-colors">
-              <span class="text-xl">📘</span>
+              <Facebook class="w-5 h-5" />
             </a>
             <a href="#" class="text-stone-500 hover:text-white transition-colors">
-              <span class="text-xl">📸</span>
+              <Instagram class="w-5 h-5" />
             </a>
           </div>
         </div>
