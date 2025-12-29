@@ -171,9 +171,27 @@ async function handleGenerateVideo() {
 
     // Background upload to Supabase Storage (non-blocking)
     const userId = authStore.authInfo.email || authStore.authInfo.sub
-    uploadVideoToStorage(videoResult.videoUrl, userId)
-      .then(async (supabaseVideoUrl) => {
-        // Save to database with permanent Supabase URL
+
+    // Validate userId before attempting upload
+    if (!userId) {
+      console.error('[Video Save] Cannot save video: userId is empty', {
+        email: authStore.authInfo.email,
+        sub: authStore.authInfo.sub,
+      })
+      toastStore.warning('無法儲存影片：請重新登入')
+      return
+    }
+
+    console.log('[Video Save] Starting background upload for user:', userId)
+    console.log('[Video Save] External URL:', videoResult.videoUrl)
+    toastStore.info('正在將影片儲存到雲端...')
+
+    // Use immediately invoked async function to properly handle errors
+    ;(async () => {
+      try {
+        const supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+        console.log('[Video Save] Upload successful:', supabaseVideoUrl)
+
         await createVideo({
           user_id: userId,
           transcript: draft.value.transcript,
@@ -187,25 +205,35 @@ async function handleGenerateVideo() {
           subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
           voice_preview: draft.value.voicePreview?.name || null,
         })
+        console.log('[Video Save] Database record created')
         toastStore.success('影片已儲存到雲端')
-      })
-      .catch((err) => {
-        console.error('Failed to upload video to storage:', err)
+      } catch (uploadErr: any) {
+        console.error('[Video Save] Upload failed:', uploadErr)
+        toastStore.warning('雲端儲存失敗，嘗試使用臨時連結...')
+
         // Fallback: save with external URL (may expire)
-        createVideo({
-          user_id: userId,
-          transcript: draft.value.transcript,
-          video_url: videoResult.videoUrl,
-          audio_url: result.audioUrl,
-          aspect_ratio: draft.value.aspectRatio,
-          status: 'completed',
-          speaker_id: speakerId,
-          title: draft.value.title || null,
-          avatar_preview: avatarUrl,
-          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
-          voice_preview: draft.value.voicePreview?.name || null,
-        }).catch((e) => console.error('Failed to save video record:', e))
-      })
+        try {
+          await createVideo({
+            user_id: userId,
+            transcript: draft.value.transcript,
+            video_url: videoResult.videoUrl,
+            audio_url: result.audioUrl,
+            aspect_ratio: draft.value.aspectRatio,
+            status: 'completed',
+            speaker_id: speakerId,
+            title: draft.value.title || null,
+            avatar_preview: avatarUrl,
+            subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+            voice_preview: draft.value.voicePreview?.name || null,
+          })
+          console.log('[Video Save] Fallback: saved with external URL')
+          toastStore.info('影片已儲存（使用臨時連結，可能會過期）')
+        } catch (dbErr: any) {
+          console.error('[Video Save] Database save failed:', dbErr)
+          toastStore.error('影片儲存失敗')
+        }
+      }
+    })()
   } catch (err: any) {
     console.error('Video generation failed:', err)
     generationStore.setError(err.message || '影片生成失敗')
@@ -259,8 +287,27 @@ async function handleContinueToVideo() {
 
     // Background upload to Supabase Storage (non-blocking)
     const userId = authStore.authInfo.email || authStore.authInfo.sub
-    uploadVideoToStorage(videoResult.videoUrl, userId)
-      .then(async (supabaseVideoUrl) => {
+
+    // Validate userId before attempting upload
+    if (!userId) {
+      console.error('[Video Save] Cannot save video: userId is empty', {
+        email: authStore.authInfo.email,
+        sub: authStore.authInfo.sub,
+      })
+      toastStore.warning('無法儲存影片：請重新登入')
+      return
+    }
+
+    console.log('[Video Save] Starting background upload for user:', userId)
+    console.log('[Video Save] External URL:', videoResult.videoUrl)
+    toastStore.info('正在將影片儲存到雲端...')
+
+    // Use immediately invoked async function to properly handle errors
+    ;(async () => {
+      try {
+        const supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+        console.log('[Video Save] Upload successful:', supabaseVideoUrl)
+
         await createVideo({
           user_id: userId,
           transcript: draft.value.transcript,
@@ -274,24 +321,35 @@ async function handleContinueToVideo() {
           subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
           voice_preview: draft.value.voicePreview?.name || null,
         })
+        console.log('[Video Save] Database record created')
         toastStore.success('影片已儲存到雲端')
-      })
-      .catch((err) => {
-        console.error('Failed to upload video to storage:', err)
-        createVideo({
-          user_id: userId,
-          transcript: draft.value.transcript,
-          video_url: videoResult.videoUrl,
-          audio_url: existingResult.audioUrl || null,
-          aspect_ratio: draft.value.aspectRatio,
-          status: 'completed',
-          speaker_id: existingResult.speakerId || null,
-          title: draft.value.title || null,
-          avatar_preview: draft.value.avatarPreview || null,
-          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
-          voice_preview: draft.value.voicePreview?.name || null,
-        }).catch((e) => console.error('Failed to save video record:', e))
-      })
+      } catch (uploadErr: any) {
+        console.error('[Video Save] Upload failed:', uploadErr)
+        toastStore.warning('雲端儲存失敗，嘗試使用臨時連結...')
+
+        // Fallback: save with external URL (may expire)
+        try {
+          await createVideo({
+            user_id: userId,
+            transcript: draft.value.transcript,
+            video_url: videoResult.videoUrl,
+            audio_url: existingResult.audioUrl || null,
+            aspect_ratio: draft.value.aspectRatio,
+            status: 'completed',
+            speaker_id: existingResult.speakerId || null,
+            title: draft.value.title || null,
+            avatar_preview: draft.value.avatarPreview || null,
+            subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+            voice_preview: draft.value.voicePreview?.name || null,
+          })
+          console.log('[Video Save] Fallback: saved with external URL')
+          toastStore.info('影片已儲存（使用臨時連結，可能會過期）')
+        } catch (dbErr: any) {
+          console.error('[Video Save] Database save failed:', dbErr)
+          toastStore.error('影片儲存失敗')
+        }
+      }
+    })()
   } catch (err: any) {
     console.error('Video generation failed:', err)
     generationStore.setError(err.message || '影片生成失敗')

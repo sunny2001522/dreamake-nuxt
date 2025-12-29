@@ -22,10 +22,22 @@ async function handleStartClick() {
     <LandingHeroSection @start="handleStartClick" />
 
     <!-- Feature Cards -->
-    <LandingFeatureCards />
+    <LandingFeatureCards @start="handleStartClick" />
+
+    <!-- Steps Section -->
+    <LandingStepsSection />
 
     <!-- Demo Section -->
     <LandingDemoSection />
+
+    <!-- Use Cases Section -->
+    <LandingUseCasesSection />
+
+    <!-- Stats Section -->
+    <LandingStatsSection />
+
+    <!-- Security Section -->
+    <LandingSecuritySection />
 
     <!-- CTA Section -->
     <LandingCTASection @start="handleStartClick" />

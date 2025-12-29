@@ -18,6 +18,7 @@ const props = defineProps<{
 const savedPersonas = ref<DbPersona[]>([])
 const isLoadingPersonas = ref(false)
 const currentPersonaId = ref<string | null>(null)
+const expandedPersonaId = ref<string | null>(null)
 
 const emit = defineEmits<{
   personaUpdate: [content: string]
@@ -194,8 +195,9 @@ async function handleGenerateTitle() {
 async function loadTopics(content: string) {
   try {
     await transcriptGeneration.suggestTopics(content)
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load topics:', err)
+    toastStore.error('主題生成失敗', err.message || '請稍後再試')
   }
 }
 
@@ -352,6 +354,12 @@ async function handleDeletePersona(personaId: string) {
     console.error('Failed to delete persona:', err)
     toastStore.error('刪除失敗')
   }
+}
+
+// Toggle expanded persona
+function toggleExpandPersona(personaId: string, event: Event) {
+  event.stopPropagation()
+  expandedPersonaId.value = expandedPersonaId.value === personaId ? null : personaId
 }
 
 // Parse title from analysis content
@@ -620,37 +628,71 @@ function handleTranscriptMicClick() {
                 </svg>
                 已保存的方向 ({{ savedPersonas.length }})
               </label>
-              <div class="space-y-2 max-h-48 overflow-y-auto">
+              <div class="space-y-2 max-h-64 overflow-y-auto">
                 <div
                   v-for="persona in savedPersonas"
                   :key="persona.id"
-                  class="p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50"
+                  class="rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50"
                   :class="currentPersonaId === persona.id ? 'border-purple-500 bg-purple-50' : 'border-stone-200'"
-                  @click="handleSelectPersona(persona)"
                 >
-                  <div class="flex items-center justify-between">
-                    <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium text-stone-800 truncate">
-                        {{ parseAnalysisTitle(persona.content) || persona.name }}
+                  <div class="p-3" @click="handleSelectPersona(persona)">
+                    <div class="flex items-center justify-between">
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-stone-800 truncate">
+                          {{ parseAnalysisTitle(persona.content) || persona.name }}
+                        </div>
+                        <div class="text-xs text-stone-500 mt-0.5">
+                          {{ persona.platforms.join(', ') }} · 已使用 {{ persona.use_count }} 次
+                        </div>
                       </div>
-                      <div class="text-xs text-stone-500 mt-0.5">
-                        {{ persona.platforms.join(', ') }} · 已使用 {{ persona.use_count }} 次
+                      <div class="flex items-center gap-1 ml-2">
+                        <span v-if="currentPersonaId === persona.id" class="text-xs text-purple-600 font-medium">
+                          使用中
+                        </span>
+                        <button
+                          class="p-1.5 hover:bg-stone-200 rounded-lg transition-colors"
+                          title="展開查看分析內容"
+                          @click="toggleExpandPersona(persona.id, $event)"
+                        >
+                          <svg
+                            class="w-4 h-4 text-stone-400 transition-transform duration-200"
+                            :class="{ 'rotate-180': expandedPersonaId === persona.id }"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          class="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+                          @click.stop="handleDeletePersona(persona.id)"
+                        >
+                          <svg class="w-4 h-4 text-stone-400 hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
-                    </div>
-                    <div class="flex items-center gap-2 ml-2">
-                      <span v-if="currentPersonaId === persona.id" class="text-xs text-purple-600 font-medium">
-                        使用中
-                      </span>
-                      <button
-                        class="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
-                        @click.stop="handleDeletePersona(persona.id)"
-                      >
-                        <svg class="w-4 h-4 text-stone-400 hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
                     </div>
                   </div>
+                  <!-- Expanded content -->
+                  <Transition
+                    enter-active-class="transition-all duration-200 ease-out"
+                    enter-from-class="max-h-0 opacity-0"
+                    enter-to-class="max-h-96 opacity-100"
+                    leave-active-class="transition-all duration-200 ease-in"
+                    leave-from-class="max-h-96 opacity-100"
+                    leave-to-class="max-h-0 opacity-0"
+                  >
+                    <div
+                      v-if="expandedPersonaId === persona.id"
+                      class="px-3 pb-3 overflow-hidden"
+                    >
+                      <div class="pt-2 border-t border-stone-200">
+                        <pre class="text-xs text-stone-600 whitespace-pre-wrap font-sans max-h-48 overflow-y-auto">{{ persona.content }}</pre>
+                      </div>
+                    </div>
+                  </Transition>
                 </div>
               </div>
             </div>
