@@ -20,6 +20,7 @@ const isOpen = computed({
     v-model="isOpen"
     title="歷史紀錄"
     width="lg"
+    :keep-alive="true"
   >
     <HistoryPage @item-selected="isOpen = false" />
   </CommonSlideDrawer>

@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import type { GenerationRecord } from "~/types";
+
 definePageMeta({
-  layout: 'default',
-})
+  layout: "default",
+});
 // Note: auth is handled by auth.global.ts middleware
 
-const authStore = useAuthStore()
-const generationStore = useGenerationStore()
-const preferencesStore = usePreferencesStore()
-const toastStore = useToastStore()
-const router = useRouter()
+const authStore = useAuthStore();
+const generationStore = useGenerationStore();
+const preferencesStore = usePreferencesStore();
+const toastStore = useToastStore();
+const router = useRouter();
 
-const { draft, isGenerating } = storeToRefs(generationStore)
+const { draft, isGenerating } = storeToRefs(generationStore);
 
 // 監聽照片、聲音、逐字稿變化，清空歷史預覽（不包含標題）
 watch(
@@ -27,192 +29,212 @@ watch(
         newVal.voice !== oldVal.voice ||
         newVal.transcript !== oldVal.transcript
       ) {
-        generationStore.generatedResult = null
+        generationStore.generatedResult = null;
       }
     }
   }
-)
+);
 
-// 監聯歷史載入，自動生成字幕並滾動到預覽區域
+// 監聯歷史載入，背景異步提升字幕品質並滾動到預覽區域
+// 注意：快速字幕已在 store 的 loadFromHistory 中生成
 watch(
   () => generationStore.generatedResult,
   async (newResult) => {
-    // 只在載入歷史記錄時觸發（有 audioUrl 但沒有字幕）
+    // 背景異步提升字幕品質（Whisper API）
+    // 只在有 audioUrl 且字幕已存在（由 store 生成）時觸發
     if (
       newResult?.audioUrl &&
       draft.value.subtitleEnabled &&
-      generationStore.subtitleSegments.length === 0 &&
+      generationStore.subtitleSegments.length > 0 &&
+      !generationStore.hasTimestamps &&
       !generationStore.isLoadingSubtitles
     ) {
-      console.log('Loading history item, generating subtitles...')
-      await generateSubtitles(newResult.audioUrl, newResult.transcript)
+      (async () => {
+        try {
+          console.log("Upgrading subtitles with Whisper API...");
+          await generateSubtitles(newResult.audioUrl!, newResult.transcript);
+        } catch (err) {
+          console.warn("Failed to upgrade subtitles:", err);
+          // 保持使用快速字幕，不影響用戶體驗
+        }
+      })();
     }
 
     // 從歷史載入時滾動到預覽區域
     if (newResult && generationStore.isLoadingFromHistory) {
-      await nextTick()
-      previewRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      await nextTick();
+      previewRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   },
   { immediate: false }
-)
+);
 
 // Persona content for topic suggestions
-const personaContent = ref('')
+const personaContent = ref("");
 
 // Mobile modals
-const showSettingsModal = ref(false)
+const showSettingsModal = ref(false);
 
 // Desktop history sidebar
-const showHistorySidebar = ref(false)
+const showHistorySidebar = ref(false);
 
 // Preview area ref for scroll
-const previewRef = ref<HTMLElement | null>(null)
+const previewRef = ref<HTMLElement | null>(null);
 
 // Ref to ImageUploader and VoicePicker for direct modal access
-const imageUploaderRef = ref<{ openModal: () => void } | null>(null)
-const voicePickerRef = ref<{ openModal: () => void } | null>(null)
+const imageUploaderRef = ref<{ openModal: () => void } | null>(null);
+const voicePickerRef = ref<{ openModal: () => void } | null>(null);
 
 function handleOpenImagePicker() {
-  imageUploaderRef.value?.openModal()
+  imageUploaderRef.value?.openModal();
 }
 
 function handleOpenVoicePicker() {
-  voicePickerRef.value?.openModal()
+  voicePickerRef.value?.openModal();
 }
 
 function handlePersonaUpdate(content: string) {
-  personaContent.value = content
+  personaContent.value = content;
 }
 
 // Load user data on mount
 onMounted(async () => {
   if (authStore.user) {
     // Use CMoney email as user identifier for data association
-    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    const userId = authStore.authInfo.email || authStore.authInfo.sub;
     await Promise.all([
       generationStore.loadDraft(userId),
       preferencesStore.loadPreferences(userId),
-    ])
+    ]);
 
     // Load saved persona if exists
-    const personaId = preferencesStore.preferences?.persona_id
+    const personaId = preferencesStore.preferences?.persona_id;
     if (personaId) {
       try {
-        const { getPersonaById } = usePersonaStorage()
-        const persona = await getPersonaById(personaId)
+        const { getPersonaById } = usePersonaStorage();
+        const persona = await getPersonaById(personaId);
         if (persona) {
-          personaContent.value = persona.content
+          personaContent.value = persona.content;
         }
       } catch (err) {
-        console.error('Failed to load saved persona:', err)
+        console.error("Failed to load saved persona:", err);
       }
     }
   }
-})
+});
 
 // Generation handlers for mobile toolbar
-const videoGeneration = useVideoGeneration()
+const videoGeneration = useVideoGeneration();
 
 // Subtitle generation helper
 async function generateSubtitles(audioUrl: string, transcript: string) {
-  if (!draft.value.subtitleEnabled) return
+  if (!draft.value.subtitleEnabled) return;
 
   try {
-    generationStore.setLoadingSubtitles(true)
+    generationStore.setLoadingSubtitles(true);
 
     // Fetch audio as blob
-    const audioResponse = await fetch(audioUrl)
-    const audioBlob = await audioResponse.blob()
+    const audioResponse = await fetch(audioUrl);
+    const audioBlob = await audioResponse.blob();
 
     // Create form data
-    const formData = new FormData()
-    formData.append('audio', audioBlob, 'audio.mp3')
-    formData.append('transcript', transcript)
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "audio.mp3");
+    formData.append("transcript", transcript);
 
     // Call subtitle generation API
-    const response = await $fetch('/api/subtitle', {
-      method: 'POST',
+    const response = await $fetch("/api/subtitle", {
+      method: "POST",
       body: formData,
-    })
+    });
 
     const result = response as {
-      segments: Array<{ text: string; startTime: number; endTime: number }>
-      hasTimestamps: boolean
-      source: string
-    }
+      segments: Array<{ text: string; startTime: number; endTime: number }>;
+      hasTimestamps: boolean;
+      source: string;
+    };
 
-    generationStore.setSubtitleSegments(result.segments, result.hasTimestamps)
-    console.log('Subtitles generated:', {
+    generationStore.setSubtitleSegments(result.segments, result.hasTimestamps);
+    console.log("Subtitles generated:", {
       count: result.segments.length,
       hasTimestamps: result.hasTimestamps,
       source: result.source,
-    })
+    });
   } catch (err) {
-    console.error('Failed to generate subtitles:', err)
+    console.error("Failed to generate subtitles:", err);
     // Fallback: generate simple text segments
-    const segments = simpleTextSegmentation(transcript)
-    generationStore.setSubtitleSegments(segments, false)
+    const segments = simpleTextSegmentation(transcript);
+    generationStore.setSubtitleSegments(segments, false);
   } finally {
-    generationStore.setLoadingSubtitles(false)
+    generationStore.setLoadingSubtitles(false);
   }
 }
 
 // Simple text segmentation fallback
 function simpleTextSegmentation(transcript: string) {
-  const cleanText = transcript.replace(/[，。！？、；：""''（）【】《》\s]+/g, '').trim()
-  if (!cleanText) return []
+  const cleanText = transcript
+    .replace(/[，。！？、；：""''（）【】《》\s]+/g, "")
+    .trim();
+  if (!cleanText) return [];
 
-  const segments: Array<{ text: string; startTime: number; endTime: number }> = []
-  const minChars = 6
-  const maxChars = 10
+  const segments: Array<{ text: string; startTime: number; endTime: number }> =
+    [];
+  const minChars = 6;
+  const maxChars = 10;
 
-  let i = 0
+  let i = 0;
   while (i < cleanText.length) {
-    const remainingChars = cleanText.length - i
-    let segmentLength = Math.min(maxChars, remainingChars)
+    const remainingChars = cleanText.length - i;
+    let segmentLength = Math.min(maxChars, remainingChars);
 
     if (remainingChars <= maxChars) {
-      segmentLength = remainingChars
+      segmentLength = remainingChars;
     } else if (remainingChars - maxChars < minChars) {
-      segmentLength = Math.ceil(remainingChars / 2)
+      segmentLength = Math.ceil(remainingChars / 2);
     }
 
     segments.push({
       text: cleanText.slice(i, i + segmentLength),
       startTime: -1,
       endTime: -1,
-    })
-    i += segmentLength
+    });
+    i += segmentLength;
   }
-  return segments
+  return segments;
 }
 
 async function handleGenerateVoice() {
-  if (!draft.value.transcript.trim() || !draft.value.avatarPreview || !draft.value.voicePreview?.speakerId) {
-    toastStore.warning('請先填寫腳本、選擇頭像和語音')
-    return
+  if (
+    !draft.value.transcript.trim() ||
+    !draft.value.avatarPreview ||
+    !draft.value.voicePreview?.speakerId
+  ) {
+    toastStore.warning("請先填寫腳本、選擇頭像和語音");
+    return;
   }
 
   if (!authStore.user) {
-    toastStore.error('請先登入帳號以使用生成功能')
-    const { $manager } = useNuxtApp()
-    await authStore.login($manager as any, '/create')
-    return
+    toastStore.error("請先登入帳號以使用生成功能");
+    const { $manager } = useNuxtApp();
+    await authStore.login($manager as any, "/create");
+    return;
   }
 
   try {
-    generationStore.resetGeneration()
-    generationStore.setStage('voice')
-    generationStore.setError(null)
+    generationStore.resetGeneration();
+    generationStore.setStage("voice");
+    generationStore.setError(null);
 
-    const speakerId = draft.value.voicePreview!.speakerId!
-    const result = await videoGeneration.generateVoice(speakerId, draft.value.transcript)
+    const speakerId = draft.value.voicePreview!.speakerId!;
+    const result = await videoGeneration.generateVoice(
+      speakerId,
+      draft.value.transcript
+    );
 
     // Generate subtitles from audio
     if (draft.value.subtitleEnabled) {
-      generationStore.setStage('subtitle')
-      await generateSubtitles(result.audioUrl, draft.value.transcript)
+      generationStore.setStage("subtitle");
+      await generateSubtitles(result.audioUrl, draft.value.transcript);
     }
 
     const record: GenerationRecord = {
@@ -221,43 +243,47 @@ async function handleGenerateVoice() {
       aspectRatio: draft.value.aspectRatio,
       duration: 0,
       createdAt: new Date(),
-      status: 'completed',
+      status: "completed",
       audioUrl: result.audioUrl,
       speakerId,
       title: draft.value.title || undefined,
       avatarPreview: draft.value.avatarPreview,
-    }
+    };
 
-    generationStore.setResult(record)
-    generationStore.setStage('complete')
-    toastStore.success('語音生成完成！')
+    generationStore.setResult(record);
+    generationStore.setStage("complete");
+    toastStore.success("語音生成完成！");
   } catch (err: any) {
-    console.error('Voice generation failed:', err)
-    generationStore.setError(err.message || '語音生成失敗')
-    generationStore.setStage('error')
-    toastStore.error('語音生成失敗', err.message)
+    console.error("Voice generation failed:", err);
+    generationStore.setError(err.message || "語音生成失敗");
+    generationStore.setStage("error");
+    toastStore.error("語音生成失敗", err.message);
   }
 }
 
 async function handleGenerateVideo() {
-  if (!draft.value.transcript.trim() || !draft.value.avatarPreview || !draft.value.voicePreview?.speakerId) {
-    toastStore.warning('請先填寫腳本、選擇頭像和語音')
-    return
+  if (
+    !draft.value.transcript.trim() ||
+    !draft.value.avatarPreview ||
+    !draft.value.voicePreview?.speakerId
+  ) {
+    toastStore.warning("請先填寫腳本、選擇頭像和語音");
+    return;
   }
 
   if (!authStore.user) {
-    toastStore.error('請先登入帳號以使用生成功能')
-    const { $manager } = useNuxtApp()
-    await authStore.login($manager as any, '/create')
-    return
+    toastStore.error("請先登入帳號以使用生成功能");
+    const { $manager } = useNuxtApp();
+    await authStore.login($manager as any, "/create");
+    return;
   }
 
   try {
-    generationStore.resetGeneration()
-    generationStore.setStage('voice')
+    generationStore.resetGeneration();
+    generationStore.setStage("voice");
 
-    const speakerId = draft.value.voicePreview!.speakerId!
-    const avatarUrl = draft.value.avatarPreview
+    const speakerId = draft.value.voicePreview!.speakerId!;
+    const avatarUrl = draft.value.avatarPreview;
 
     const result = await videoGeneration.startGeneration({
       transcript: draft.value.transcript,
@@ -266,30 +292,36 @@ async function handleGenerateVideo() {
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
-    })
+    });
 
     // Generate subtitles in parallel with video generation
     if (draft.value.subtitleEnabled) {
-      generationStore.setStage('subtitle')
-      await generateSubtitles(result.audioUrl, draft.value.transcript)
+      generationStore.setStage("subtitle");
+      await generateSubtitles(result.audioUrl, draft.value.transcript);
     }
 
-    generationStore.setStage('video')
+    generationStore.setStage("video");
     const videoResult = await videoGeneration.pollUntilComplete(
       result.taskId,
       result.pollEndpoint
-    )
+    );
 
     // Upload video to Supabase Storage for permanent URL
-    const { uploadVideoToStorage } = useVideoStorage()
-    const userId = authStore.authInfo.email || authStore.authInfo.sub
-    let permanentVideoUrl = videoResult.videoUrl
+    const { uploadVideoToStorage } = useVideoStorage();
+    const userId = authStore.authInfo.email || authStore.authInfo.sub;
+    let permanentVideoUrl = videoResult.videoUrl;
 
     try {
-      toastStore.info('正在保存影片...')
-      permanentVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+      toastStore.info("正在保存影片...");
+      permanentVideoUrl = await uploadVideoToStorage(
+        videoResult.videoUrl,
+        userId
+      );
     } catch (uploadErr) {
-      console.warn('Failed to upload video to storage, using original URL:', uploadErr)
+      console.warn(
+        "Failed to upload video to storage, using original URL:",
+        uploadErr
+      );
       // If upload fails, still use original URL (though it may expire)
     }
 
@@ -299,22 +331,22 @@ async function handleGenerateVideo() {
       aspectRatio: draft.value.aspectRatio,
       duration: 0,
       createdAt: new Date(),
-      status: 'completed',
+      status: "completed",
       audioUrl: result.audioUrl,
       videoUrl: permanentVideoUrl,
       speakerId,
       title: draft.value.title || undefined,
       avatarPreview: avatarUrl,
-    }
+    };
 
-    generationStore.setResult(record)
-    generationStore.setStage('complete')
-    toastStore.success('影片生成完成！')
+    generationStore.setResult(record);
+    generationStore.setStage("complete");
+    toastStore.success("影片生成完成！");
   } catch (err: any) {
-    console.error('Video generation failed:', err)
-    generationStore.setError(err.message || '影片生成失敗')
-    generationStore.setStage('error')
-    toastStore.error('影片生成失敗', err.message)
+    console.error("Video generation failed:", err);
+    generationStore.setError(err.message || "影片生成失敗");
+    generationStore.setStage("error");
+    toastStore.error("影片生成失敗", err.message);
   }
 }
 </script>
@@ -324,17 +356,29 @@ async function handleGenerateVideo() {
   <div class="lg:hidden h-[calc(100vh-64px)] flex flex-col overflow-hidden">
     <div class="flex-1 flex flex-col min-h-0 px-4 py-2 gap-2 pb-20">
       <!-- Preview Area (Flexible) -->
-      <div ref="previewRef" class="relative flex-1 min-h-0 flex items-center justify-center">
+      <div
+        ref="previewRef"
+        class="relative flex-1 min-h-0 flex items-center justify-center"
+      >
         <CreateVideoPreview class="w-full h-full" />
         <!-- History button -->
         <NuxtLink
           to="/history"
           class="absolute top-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
-          
         </NuxtLink>
       </div>
 
@@ -378,8 +422,18 @@ async function handleGenerateVideo() {
           <div class="flex items-center justify-between px-4 py-3 border-b">
             <h3 class="font-medium">設定</h3>
             <button @click="showSettingsModal = false" class="p-1">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -435,7 +489,7 @@ async function handleGenerateVideo() {
           <div class="relative flex-1 min-h-0 flex items-center justify-center">
             <CreateVideoPreview />
             <!-- Desktop History button -->
-            <button
+            <!-- <button
               @click="showHistorySidebar = true"
               class="absolute top-2 right-2 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm hover:bg-white hover:shadow-md transition-all"
             >
@@ -443,7 +497,7 @@ async function handleGenerateVideo() {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>歷史</span>
-            </button>
+            </button> -->
           </div>
 
           <!-- Generation Progress -->

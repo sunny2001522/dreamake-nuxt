@@ -203,6 +203,7 @@ export interface DbVideo {
   title: string | null
   transcript: string
   video_url: string | null
+  original_video_url: string | null // Original CDN URL (expires after ~3 days)
   audio_url: string | null
   thumbnail_url: string | null
   aspect_ratio: AspectRatio

@@ -161,10 +161,30 @@ Style: Default,${subtitleStyle.fontName},${fontSize},${subtitleStyle.primaryColo
     dialoguesContent += `Dialogue: 1,0:00:00.00,9:59:59.99,Title,,0,0,0,,${escapedTitle}\n`
   }
 
+  // 處理無時間戳的字幕（startTime = -1 表示無時間戳）
+  let processedSegments = segments
+  const hasNoTimestamps = segments.length > 0 && segments.every(seg => seg.startTime < 0)
+
+  if (hasNoTimestamps) {
+    // 根據文字長度估算顯示時間（每秒約 5 個中文字）
+    const CHARS_PER_SECOND = 5
+    let currentTime = 0
+
+    processedSegments = segments.map(seg => {
+      const duration = Math.max(seg.text.length / CHARS_PER_SECOND, 1) // 最少 1 秒
+      const startTime = currentTime
+      const endTime = currentTime + duration
+      currentTime = endTime
+      return { ...seg, startTime, endTime }
+    })
+
+    console.log('Auto-assigned timestamps for segments without timing:', processedSegments.length)
+  }
+
   // 調整時間戳避免字幕重疊（當前句結束時間不超過下一句開始時間）
-  const adjustedSegments = segments.map((seg, i) => {
-    if (i < segments.length - 1) {
-      const nextSeg = segments[i + 1]
+  const adjustedSegments = processedSegments.map((seg, i) => {
+    if (i < processedSegments.length - 1) {
+      const nextSeg = processedSegments[i + 1]
       if (seg.endTime > nextSeg.startTime) {
         return { ...seg, endTime: nextSeg.startTime }
       }

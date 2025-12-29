@@ -191,6 +191,42 @@ export const useGenerationStore = defineStore('generation', () => {
     hasTimestamps.value = false
   }
 
+  // Simple text segmentation for quick subtitle generation
+  function simpleTextSegmentation(transcript: string): TimedSegment[] {
+    const cleanText = transcript
+      .replace(/[，。！？、；：""''（）【】《》\s]+/g, '')
+      .trim()
+
+    if (!cleanText) return []
+
+    const segments: TimedSegment[] = []
+    const minChars = 6
+    const maxChars = 10
+
+    let i = 0
+    while (i < cleanText.length) {
+      const remainingChars = cleanText.length - i
+      let segmentLength = Math.min(maxChars, remainingChars)
+
+      if (remainingChars <= maxChars) {
+        segmentLength = remainingChars
+      } else if (remainingChars - maxChars < minChars) {
+        segmentLength = Math.ceil(remainingChars / 2)
+      }
+
+      const text = cleanText.slice(i, i + segmentLength)
+      segments.push({
+        text,
+        startTime: -1,
+        endTime: -1,
+      })
+
+      i += segmentLength
+    }
+
+    return segments
+  }
+
   // Load from history record
   function loadFromHistory(item: GenerationRecord) {
     // 開始載入
@@ -222,9 +258,16 @@ export const useGenerationStore = defineStore('generation', () => {
     stage.value = 'complete'
     error.value = null
 
-    // 清空舊字幕（將由 create.vue 重新生成）
-    subtitleSegments.value = []
-    hasTimestamps.value = false
+    // 立即生成快速字幕（毫秒級），不依賴 create.vue 的 watch
+    if (subtitleConfig.enabled && item.transcript) {
+      const quickSegments = simpleTextSegmentation(item.transcript)
+      subtitleSegments.value = quickSegments
+      hasTimestamps.value = false
+      console.log('Quick subtitles generated in store:', quickSegments.length)
+    } else {
+      subtitleSegments.value = []
+      hasTimestamps.value = false
+    }
   }
 
   // Clear history loading state (called when media is ready)

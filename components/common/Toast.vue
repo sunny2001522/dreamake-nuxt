@@ -1,19 +1,19 @@
 <script setup lang="ts">
-const toastStore = useToastStore()
+const toastStore = useToastStore();
 
 const iconMap = {
-  success: '✓',
-  error: '✕',
-  warning: '⚠',
-  info: 'ℹ',
-}
+  success: "✓",
+  error: "✕",
+  warning: "⚠",
+  info: "ℹ",
+};
 
 const colorMap = {
-  success: 'bg-green-500',
-  error: 'bg-red-500',
-  warning: 'bg-yellow-500',
-  info: 'bg-blue-500',
-}
+  success: "bg-green-500",
+  error: "bg-red-500",
+  warning: "bg-yellow-500",
+  info: "bg-blue-500",
+};
 </script>
 
 <template>
@@ -25,14 +25,6 @@ const colorMap = {
           :key="toast.id"
           class="flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-lg border border-stone-100 min-w-[280px] max-w-[400px]"
         >
-          <span
-            :class="[
-              'flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold',
-              colorMap[toast.type],
-            ]"
-          >
-            {{ iconMap[toast.type] }}
-          </span>
           <p class="flex-1 text-sm text-stone-700">
             {{ toast.message }}
           </p>
@@ -40,8 +32,18 @@ const colorMap = {
             class="flex-shrink-0 text-stone-400 hover:text-stone-600 transition-colors"
             @click="toastStore.removeToast(toast.id)"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>

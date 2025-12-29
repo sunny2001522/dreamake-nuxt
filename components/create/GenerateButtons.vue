@@ -196,6 +196,7 @@ async function handleGenerateVideo() {
           user_id: userId,
           transcript: draft.value.transcript,
           video_url: supabaseVideoUrl,
+          original_video_url: videoResult.videoUrl, // Store original CDN URL for faster access within 3 days
           audio_url: result.audioUrl,
           aspect_ratio: draft.value.aspectRatio,
           status: 'completed',
@@ -217,6 +218,7 @@ async function handleGenerateVideo() {
             user_id: userId,
             transcript: draft.value.transcript,
             video_url: videoResult.videoUrl,
+            original_video_url: videoResult.videoUrl, // Same as video_url in fallback case
             audio_url: result.audioUrl,
             aspect_ratio: draft.value.aspectRatio,
             status: 'completed',
@@ -312,6 +314,7 @@ async function handleContinueToVideo() {
           user_id: userId,
           transcript: draft.value.transcript,
           video_url: supabaseVideoUrl,
+          original_video_url: videoResult.videoUrl, // Store original CDN URL for faster access within 3 days
           audio_url: existingResult.audioUrl || null,
           aspect_ratio: draft.value.aspectRatio,
           status: 'completed',
@@ -333,6 +336,7 @@ async function handleContinueToVideo() {
             user_id: userId,
             transcript: draft.value.transcript,
             video_url: videoResult.videoUrl,
+            original_video_url: videoResult.videoUrl, // Same as video_url in fallback case
             audio_url: existingResult.audioUrl || null,
             aspect_ratio: draft.value.aspectRatio,
             status: 'completed',

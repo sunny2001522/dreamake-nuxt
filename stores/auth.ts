@@ -89,10 +89,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function clearAllState() {
+  async function clearAllState() {
     clearTokenInfo()
     clearAuthInfo()
     isInitialized.value = false
+
+    // Clear IndexedDB cache
+    const { clearAllCache } = useVideoCache()
+    await clearAllCache()
   }
 
   // Actions
@@ -195,7 +199,7 @@ export const useAuthStore = defineStore('auth', () => {
       )
       localStorage.removeItem(logoutRedirectPath)
 
-      clearAllState()
+      await clearAllState()
       await manager.clearStaleState()
 
       await navigateTo(redirectPath)
@@ -214,13 +218,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function removeUser(manager: UserManager) {
+  async function removeUser(manager: UserManager) {
     try {
       manager.removeUser()
-      clearAllState()
+      await clearAllState()
     } catch (error) {
       console.error('Failed to remove user:', error)
-      clearAllState()
+      await clearAllState()
     }
   }
 

@@ -118,12 +118,13 @@ export async function cloneVoice(
   const formData = new FormData()
   formData.append('name', voiceName)
 
-  // Add all audio files
+  // Add all audio files - TopMediai API expects field name 'files'
   for (let i = 0; i < audioFiles.length; i++) {
     const file = audioFiles[i]
     const blob = new Blob([file.data], { type: file.type })
-    formData.append('audio', blob, file.filename)
+    formData.append('files', blob, file.filename)
   }
+  formData.append('description', `Cloned voice for DreaMake (${audioFiles.length} samples)`)
 
   console.log(`TOPMEDIAI Clone - Starting clone with ${audioFiles.length} audio files`)
 
@@ -150,7 +151,7 @@ export async function cloneVoice(
   const result = await response.json()
   console.log('TOPMEDIAI Clone result:', result)
 
-  const speakerId = result.data?.speaker_id || result.speaker_id
+  const speakerId = result.data?.speaker_id || result.data?.speaker || result.speaker_id || result.speaker
   if (!speakerId) {
     throw new Error('TOPMEDIAI Clone response did not contain a speaker ID')
   }
