@@ -1,22 +1,30 @@
 <script setup lang="ts">
-const securityFeatures = [
+import { Award, Server, Lock, Users, type LucideIcon } from 'lucide-vue-next'
+
+interface SecurityFeature {
+  icon: LucideIcon
+  title: string
+  description: string
+}
+
+const securityFeatures: SecurityFeature[] = [
   {
-    icon: '🏆',
+    icon: Award,
     title: 'ISO 27001 認證',
     description: '符合 ISO/IEC 27001:2022 國際資安標準',
   },
   {
-    icon: '🖥️',
+    icon: Server,
     title: '世界級伺服器',
     description: '採用頂級雲端基礎設施，確保穩定運行',
   },
   {
-    icon: '🔒',
+    icon: Lock,
     title: '透明隱私政策',
     description: '您的數據安全是我們的首要任務',
   },
   {
-    icon: '👥',
+    icon: Users,
     title: '專業資安團隊',
     description: '24/7 全天候監控，保障系統安全',
   },
@@ -43,7 +51,7 @@ const securityFeatures = [
           :key="feature.title"
           class="p-6 bg-stone-800/50 rounded-2xl border border-stone-700 hover:border-purple-500/50 transition-colors"
         >
-          <div class="text-4xl mb-4">{{ feature.icon }}</div>
+          <component :is="feature.icon" class="w-10 h-10 text-purple-400 mb-4" />
           <h3 class="text-lg font-semibold text-white mb-2">
             {{ feature.title }}
           </h3>

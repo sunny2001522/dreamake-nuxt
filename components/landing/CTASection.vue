@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Rocket, Check } from 'lucide-vue-next'
+
 const emit = defineEmits<{
   start: []
 }>()
@@ -9,7 +11,7 @@ const emit = defineEmits<{
     <div class="container mx-auto px-4 text-center">
       <!-- Decorative Element -->
       <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 rounded-2xl shadow-lg mb-8">
-        <span class="text-4xl">🚀</span>
+        <Rocket class="w-10 h-10 text-white" />
       </div>
 
       <h2 class="text-3xl md:text-5xl font-bold text-stone-800 mb-6">
@@ -33,15 +35,15 @@ const emit = defineEmits<{
       <!-- Trust Indicators -->
       <div class="flex flex-wrap items-center justify-center gap-8 mt-12 text-stone-500">
         <div class="flex items-center gap-2">
-          <span>✓</span>
+          <Check class="w-4 h-4 text-green-500" />
           <span class="text-sm">免費開始</span>
         </div>
         <div class="flex items-center gap-2">
-          <span>✓</span>
+          <Check class="w-4 h-4 text-green-500" />
           <span class="text-sm">無需信用卡</span>
         </div>
         <div class="flex items-center gap-2">
-          <span>✓</span>
+          <Check class="w-4 h-4 text-green-500" />
           <span class="text-sm">隨時取消</span>
         </div>
       </div>

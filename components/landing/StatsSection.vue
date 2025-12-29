@@ -1,28 +1,37 @@
 <script setup lang="ts">
-const stats = [
+import { DollarSign, TrendingUp, Target, Rocket, type LucideIcon } from 'lucide-vue-next'
+
+interface Stat {
+  value: string
+  unit: string
+  label: string
+  icon: LucideIcon
+}
+
+const stats: Stat[] = [
   {
     value: '$10,000',
     unit: '/月',
     label: '節省影片製作成本',
-    icon: '💰',
+    icon: DollarSign,
   },
   {
     value: '+52%',
     unit: '',
     label: '提升互動率',
-    icon: '📈',
+    icon: TrendingUp,
   },
   {
     value: '74%',
     unit: '',
     label: '提高轉換率',
-    icon: '🎯',
+    icon: Target,
   },
   {
     value: '+200%',
     unit: '',
     label: '加速市場成長',
-    icon: '🚀',
+    icon: Rocket,
   },
 ]
 </script>
@@ -47,7 +56,7 @@ const stats = [
           :key="stat.label"
           class="text-center p-6 bg-white/10 backdrop-blur rounded-2xl"
         >
-          <div class="text-4xl mb-4">{{ stat.icon }}</div>
+          <component :is="stat.icon" class="w-10 h-10 text-white mb-4" />
           <div class="flex items-baseline justify-center gap-1 mb-2">
             <span class="text-4xl md:text-5xl font-bold text-white">
               {{ stat.value }}

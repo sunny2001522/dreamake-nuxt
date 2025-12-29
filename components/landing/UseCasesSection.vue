@@ -1,13 +1,31 @@
 <script setup lang="ts">
-const useCases = [
-  { icon: '📊', title: '解說視頻', description: '產品介紹、功能說明' },
-  { icon: '🎓', title: '培訓與發展', description: '員工培訓、技能提升' },
-  { icon: '📚', title: '教學影片', description: '線上課程、知識分享' },
-  { icon: '📰', title: '新聞播報', description: '資訊傳遞、新聞報導' },
-  { icon: '💼', title: '銷售影片', description: '產品推廣、銷售轉換' },
-  { icon: '📢', title: '市場行銷', description: '品牌宣傳、活動推廣' },
-  { icon: '💬', title: '溝通影片', description: '內部溝通、公告通知' },
-  { icon: '🎥', title: '教程影片', description: '操作指南、使用教學' },
+import {
+  BarChart3,
+  GraduationCap,
+  BookOpen,
+  Newspaper,
+  Briefcase,
+  Megaphone,
+  MessageSquare,
+  Video,
+  type LucideIcon,
+} from 'lucide-vue-next'
+
+interface UseCase {
+  icon: LucideIcon
+  title: string
+  description: string
+}
+
+const useCases: UseCase[] = [
+  { icon: BarChart3, title: '解說視頻', description: '產品介紹、功能說明' },
+  { icon: GraduationCap, title: '培訓與發展', description: '員工培訓、技能提升' },
+  { icon: BookOpen, title: '教學影片', description: '線上課程、知識分享' },
+  { icon: Newspaper, title: '新聞播報', description: '資訊傳遞、新聞報導' },
+  { icon: Briefcase, title: '銷售影片', description: '產品推廣、銷售轉換' },
+  { icon: Megaphone, title: '市場行銷', description: '品牌宣傳、活動推廣' },
+  { icon: MessageSquare, title: '溝通影片', description: '內部溝通、公告通知' },
+  { icon: Video, title: '教程影片', description: '操作指南、使用教學' },
 ]
 </script>
 
@@ -31,8 +49,8 @@ const useCases = [
           :key="useCase.title"
           class="group p-6 bg-stone-50 rounded-2xl hover:bg-gradient-to-br hover:from-pink-50 hover:to-purple-50 hover:shadow-lg transition-all duration-300 cursor-pointer"
         >
-          <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">
-            {{ useCase.icon }}
+          <div class="mb-4 group-hover:scale-110 transition-transform">
+            <component :is="useCase.icon" class="w-10 h-10 text-purple-500" />
           </div>
           <h3 class="text-lg font-semibold text-stone-800 mb-2">
             {{ useCase.title }}
