@@ -43,6 +43,8 @@ const cloningVoiceName = ref<string | null>(null)
 // Audio preview state
 const previewingVoiceId = ref<string | null>(null)
 const previewAudio = ref<HTMLAudioElement | null>(null)
+const generatingPreviewId = ref<string | null>(null)
+const previewCache = ref<Map<string, string>>(new Map())
 
 // Load saved voices on mount
 onMounted(() => {
@@ -396,13 +398,38 @@ const hasSavedVoices = computed(() => savedVoices.value.length > 0)
 const recordingProgress = computed(() => (recordingDuration.value / MAX_AUDIO_DURATION) * 100)
 
 // Audio preview functions
-function handlePreviewVoice(event: Event, voice: SavedVoice) {
+async function generateVoicePreview(voice: SavedVoice): Promise<string | null> {
+  const voiceId = voice.supabaseId || String(voice.id)
+
+  // 檢查快取
+  if (previewCache.value.has(voiceId)) {
+    return previewCache.value.get(voiceId)!
+  }
+
+  // 調用 TTS API 生成「歡迎追蹤我」
+  const response = await $fetch('/api/voice/tts', {
+    method: 'POST',
+    body: {
+      speakerId: voice.speakerId,
+      transcript: '歡迎追蹤我',
+    },
+  })
+
+  if (response.success && response.audioUrl) {
+    previewCache.value.set(voiceId, response.audioUrl)
+    return response.audioUrl
+  }
+
+  return null
+}
+
+async function handlePreviewVoice(event: Event, voice: SavedVoice) {
   event.stopPropagation()
 
-  // 沒有 audioUrl 直接返回（按鈕已禁用）
-  if (!voice.audioUrl) return
-
   const voiceId = voice.supabaseId || String(voice.id)
+
+  // 如果正在生成，忽略
+  if (generatingPreviewId.value === voiceId) return
 
   // 如果正在播放此語音，停止它
   if (previewingVoiceId.value === voiceId) {
@@ -413,20 +440,37 @@ function handlePreviewVoice(event: Event, voice: SavedVoice) {
   // 停止當前預覽
   stopPreview()
 
-  // 開始新預覽
-  previewingVoiceId.value = voiceId
-  previewAudio.value = new Audio(voice.audioUrl)
-  previewAudio.value.play()
+  // 顯示載入狀態
+  generatingPreviewId.value = voiceId
 
-  previewAudio.value.onended = () => {
-    previewingVoiceId.value = null
-    previewAudio.value = null
-  }
+  try {
+    // 生成或獲取快取的預覽音頻
+    const audioUrl = await generateVoicePreview(voice)
 
-  previewAudio.value.onerror = () => {
-    // 靜默處理錯誤
-    previewingVoiceId.value = null
-    previewAudio.value = null
+    if (!audioUrl) {
+      toastStore.error('生成預覽失敗')
+      return
+    }
+
+    // 播放預覽
+    previewingVoiceId.value = voiceId
+    previewAudio.value = new Audio(audioUrl)
+    previewAudio.value.play()
+
+    previewAudio.value.onended = () => {
+      previewingVoiceId.value = null
+      previewAudio.value = null
+    }
+
+    previewAudio.value.onerror = () => {
+      previewingVoiceId.value = null
+      previewAudio.value = null
+    }
+  } catch (error) {
+    console.error('Preview generation failed:', error)
+    toastStore.error('生成預覽失敗')
+  } finally {
+    generatingPreviewId.value = null
   }
 }
 
@@ -606,18 +650,28 @@ onUnmounted(() => {
                   <button
                     class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
                     :class="[
-                      !voice.audioUrl
-                        ? 'bg-stone-300 cursor-not-allowed'
+                      generatingPreviewId === (voice.supabaseId || String(voice.id))
+                        ? 'bg-stone-500 cursor-wait'
                         : previewingVoiceId === (voice.supabaseId || String(voice.id))
                           ? 'bg-stone-800 hover:bg-stone-900'
                           : 'bg-stone-700 hover:bg-stone-800'
                     ]"
-                    :disabled="!voice.audioUrl"
-                    @click="voice.audioUrl && handlePreviewVoice($event, voice)"
+                    :disabled="generatingPreviewId === (voice.supabaseId || String(voice.id))"
+                    @click="handlePreviewVoice($event, voice)"
                   >
+                    <!-- Loading spinner - 生成中 -->
+                    <svg
+                      v-if="generatingPreviewId === (voice.supabaseId || String(voice.id))"
+                      class="animate-spin w-4 h-4 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
                     <!-- 音波動畫 - 播放中 -->
                     <div
-                      v-if="previewingVoiceId === (voice.supabaseId || String(voice.id))"
+                      v-else-if="previewingVoiceId === (voice.supabaseId || String(voice.id))"
                       class="flex items-center justify-center gap-0.5 w-4 h-4"
                     >
                       <div
@@ -630,19 +684,10 @@ onUnmounted(() => {
                         }"
                       />
                     </div>
-                    <!-- Play triangle icon - 有音訊時 -->
-                    <svg
-                      v-else-if="voice.audioUrl"
-                      class="w-4 h-4 text-white ml-0.5"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <!-- Disabled icon - 無音訊 -->
+                    <!-- Play triangle icon -->
                     <svg
                       v-else
-                      class="w-4 h-4 text-stone-500"
+                      class="w-4 h-4 text-white ml-0.5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >

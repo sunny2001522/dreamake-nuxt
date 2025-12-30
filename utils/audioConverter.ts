@@ -57,16 +57,25 @@ export async function convertToWav(file: File): Promise<File> {
  * Convert AudioBuffer to WAV Blob (highly compressed: 16000Hz, mono, 16-bit, with normalization)
  * Optimized for deployment environment with ~4.5MB limit
  * 16kHz is sufficient for voice cloning (telephone quality)
+ * Audio is truncated to MAX_DURATION_SECONDS to ensure file size stays under 10MB
  */
 function audioBufferToCompressedWav(audioBuffer: AudioBuffer): Blob {
+  const MAX_DURATION_SECONDS = 40 // Maximum duration for voice cloning
   const targetSampleRate = 16000 // Highly compressed (telephone quality, sufficient for voice cloning)
   const format = 1 // PCM
   const bitDepth = 16
   const numChannels = 1 // Force mono
 
-  // Calculate sample count (no resampling)
+  // Calculate sample count after resampling
   const ratio = audioBuffer.sampleRate / targetSampleRate
-  const newLength = Math.floor(audioBuffer.length / ratio)
+  let newLength = Math.floor(audioBuffer.length / ratio)
+
+  // Truncate to maximum duration (40 seconds)
+  const maxSamples = MAX_DURATION_SECONDS * targetSampleRate
+  if (newLength > maxSamples) {
+    console.log(`Audio truncated from ${(newLength / targetSampleRate).toFixed(1)}s to ${MAX_DURATION_SECONDS}s`)
+    newLength = maxSamples
+  }
 
   const bytesPerSample = bitDepth / 8
   const blockAlign = numChannels * bytesPerSample
