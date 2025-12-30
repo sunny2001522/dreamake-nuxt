@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SavedImage, AspectRatio } from "~/types";
+import type { SavedImage, AspectRatio, DbImage } from "~/types";
 
 const generationStore = useGenerationStore();
 const authStore = useAuthStore();
@@ -130,11 +130,46 @@ function handleCloseModal() {
 }
 
 async function processFile(file: File) {
+  if (!authStore.user) {
+    toastStore.error("請先登入");
+    return;
+  }
+
   try {
+    // 1. 先顯示預覽
     const previewUrl = URL.createObjectURL(file);
     generationStore.setAvatar(null, previewUrl);
+
+    // 2. 使用 Server API 上傳（繞過 RLS）
+    const userId = authStore.authInfo.email || authStore.authInfo.sub;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("userId", userId);
+    formData.append("name", file.name.replace(/\.[^/.]+$/, ""));
+
+    const savedImage = await $fetch<DbImage>("/api/images", {
+      method: "POST",
+      body: formData,
+    });
+
+    // 3. 更新 store 使用 Supabase URL
+    generationStore.setAvatar(parseInt(savedImage.id) || null, savedImage.image_url);
+
+    // 4. 添加到本地列表
+    savedImages.value.unshift({
+      id: parseInt(savedImage.id) || undefined,
+      supabaseId: savedImage.id,
+      name: savedImage.name,
+      imageData: savedImage.image_url,
+      imageMimeType: savedImage.image_mime_type,
+      thumbnailData: savedImage.thumbnail_url || undefined,
+      createdAt: new Date(savedImage.created_at),
+      lastUsedAt: new Date(savedImage.last_used_at),
+      useCount: savedImage.use_count,
+    });
+
     showModal.value = false;
-    toastStore.success("照片已上傳");
+    toastStore.success("照片已上傳並保存");
   } catch (err) {
     console.error("Error processing file:", err);
     toastStore.error("上傳失敗");
