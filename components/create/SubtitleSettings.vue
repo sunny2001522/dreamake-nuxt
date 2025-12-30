@@ -11,9 +11,9 @@ const fonts: { value: SubtitleFont; label: string }[] = [
 ];
 
 const backgrounds: { value: SubtitleBackground; label: string }[] = [
-  { value: "none", label: "無背景" },
-  { value: "black", label: "黑色背景" },
-  { value: "white", label: "白色背景" },
+  { value: "none", label: "標題無背景" },
+  { value: "black", label: "標題黑色背景" },
+  { value: "white", label: "標題白色背景" },
 ];
 
 const fontDropdownOpen = ref(false);
@@ -81,7 +81,7 @@ const currentFontLabel = computed(() => {
 const currentBackgroundLabel = computed(() => {
   return (
     backgrounds.find((b) => b.value === draft.value.subtitleBackground)
-      ?.label || "無背景"
+      ?.label || "標題無背景"
   );
 });
 </script>
@@ -155,8 +155,8 @@ const currentBackgroundLabel = computed(() => {
         </Transition>
       </div>
 
-      <!-- Background Dropdown -->
-      <div ref="backgroundDropdownRef" class="relative flex-1">
+      <!-- Background Dropdown - 只在有標題時顯示 -->
+      <div v-if="draft.title" ref="backgroundDropdownRef" class="relative flex-1">
         <button
           type="button"
           class="w-full flex items-center justify-between bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 px-3 cursor-pointer hover:border-stone-300 transition-all"

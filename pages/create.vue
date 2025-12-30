@@ -35,38 +35,20 @@ watch(
   }
 );
 
-// 監聯歷史載入，背景異步提升字幕品質並滾動到預覽區域
-// 注意：快速字幕已在 store 的 loadFromHistory 中生成
+// 監聽歷史載入，滾動到預覽區域
+// 注意：字幕生成已經在 stores/generation.ts 的 loadFromHistory 中直接處理
 watch(
   () => generationStore.generatedResult,
-  async (newResult) => {
-    // 背景異步提升字幕品質（Whisper API）
-    // 只在有 audioUrl 且字幕已存在（由 store 生成）時觸發
-    if (
-      newResult?.audioUrl &&
-      draft.value.subtitleEnabled &&
-      generationStore.subtitleSegments.length > 0 &&
-      !generationStore.hasTimestamps &&
-      !generationStore.isLoadingSubtitles
-    ) {
-      (async () => {
-        try {
-          console.log("Upgrading subtitles with Whisper API...");
-          await generateSubtitles(newResult.audioUrl!, newResult.transcript);
-        } catch (err) {
-          console.warn("Failed to upgrade subtitles:", err);
-          // 保持使用快速字幕，不影響用戶體驗
-        }
-      })();
-    }
+  async (newResult, oldResult) => {
+    // 只處理新載入的結果
+    if (!newResult || newResult === oldResult) return;
 
     // 從歷史載入時滾動到預覽區域
-    if (newResult && generationStore.isLoadingFromHistory) {
+    if (generationStore.isLoadingFromHistory) {
       await nextTick();
       previewRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  },
-  { immediate: false }
+  }
 );
 
 // Persona content for topic suggestions
@@ -127,41 +109,44 @@ onMounted(async () => {
 const videoGeneration = useVideoGeneration();
 
 // Subtitle generation helper
+// 優化：只傳 URL 給後端，讓後端直接下載音檔（避免前端下載再上傳的雙重傳輸）
 async function generateSubtitles(audioUrl: string, transcript: string) {
   if (!draft.value.subtitleEnabled) return;
+
+  const startTime = Date.now();
+  console.log("[Subtitle] Start generating...", { audioUrl: audioUrl.substring(0, 50) });
 
   try {
     generationStore.setLoadingSubtitles(true);
 
-    // Fetch audio as blob
-    const audioResponse = await fetch(audioUrl);
-    const audioBlob = await audioResponse.blob();
-
-    // Create form data
-    const formData = new FormData();
-    formData.append("audio", audioBlob, "audio.mp3");
-    formData.append("transcript", transcript);
-
-    // Call subtitle generation API
+    // 只傳 URL，讓後端下載音檔（減少 60-80% 傳輸時間）
     const response = await $fetch("/api/subtitle", {
       method: "POST",
-      body: formData,
+      body: {
+        audioUrl,
+        transcript,
+      },
     });
 
     const result = response as {
       segments: Array<{ text: string; startTime: number; endTime: number }>;
       hasTimestamps: boolean;
       source: string;
+      timings?: Record<string, number>;
     };
 
     generationStore.setSubtitleSegments(result.segments, result.hasTimestamps);
-    console.log("Subtitles generated:", {
+
+    const totalTime = Date.now() - startTime;
+    console.log(`[Subtitle] Completed in ${totalTime}ms`, {
       count: result.segments.length,
       hasTimestamps: result.hasTimestamps,
       source: result.source,
+      serverTimings: result.timings,
     });
   } catch (err) {
-    console.error("Failed to generate subtitles:", err);
+    const totalTime = Date.now() - startTime;
+    console.error(`[Subtitle] Failed after ${totalTime}ms:`, err);
     // Fallback: generate simple text segments
     const segments = simpleTextSegmentation(transcript);
     generationStore.setSubtitleSegments(segments, false);
@@ -391,9 +376,6 @@ async function handleGenerateVideo() {
 
       <!-- Transcript Input (Simplified) -->
       <CreateMobileTranscriptInput class="flex-shrink-0" />
-
-      <!-- Generation Progress -->
-      <CreateGenerationProgress v-if="isGenerating" class="flex-shrink-0" />
     </div>
 
     <!-- Mobile Bottom Toolbar -->
@@ -499,9 +481,6 @@ async function handleGenerateVideo() {
               <span>歷史</span>
             </button> -->
           </div>
-
-          <!-- Generation Progress -->
-          <CreateGenerationProgress class="mt-3 flex-shrink-0" />
         </div>
       </div>
     </div>

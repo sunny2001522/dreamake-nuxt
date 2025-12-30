@@ -192,43 +192,86 @@ export const useGenerationStore = defineStore('generation', () => {
   }
 
   // Simple text segmentation for quick subtitle generation
+  // PRIORITY: Split by punctuation first, then by character count if needed
   function simpleTextSegmentation(transcript: string): TimedSegment[] {
-    const cleanText = transcript
-      .replace(/[，。！？、；：""''（）【】《》\s]+/g, '')
-      .trim()
+    if (!transcript.trim()) return []
 
-    if (!cleanText) return []
+    // Step 1: Split by punctuation first (priority over character count)
+    const punctuationPattern = /[，。！？、；：,\.!?\n]+/g
+    const rawSegments = transcript
+      .split(punctuationPattern)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
 
-    const segments: TimedSegment[] = []
-    const minChars = 6
-    const maxChars = 10
+    // Step 2: Further split segments that are too long (>15 chars)
+    const textSegments: string[] = []
+    const maxChars = 15
 
-    let i = 0
-    while (i < cleanText.length) {
-      const remainingChars = cleanText.length - i
-      let segmentLength = Math.min(maxChars, remainingChars)
-
-      if (remainingChars <= maxChars) {
-        segmentLength = remainingChars
-      } else if (remainingChars - maxChars < minChars) {
-        segmentLength = Math.ceil(remainingChars / 2)
+    for (const segment of rawSegments) {
+      if (getChineseCharCount(segment) <= maxChars) {
+        textSegments.push(segment)
+      } else {
+        // Split long segments
+        const subSegments = splitLongSegment(segment, maxChars)
+        textSegments.push(...subSegments)
       }
-
-      const text = cleanText.slice(i, i + segmentLength)
-      segments.push({
-        text,
-        startTime: -1,
-        endTime: -1,
-      })
-
-      i += segmentLength
     }
 
-    return segments
+    // Step 3: Clean and convert to TimedSegment
+    return textSegments.map(text => ({
+      text: cleanSegmentText(text),
+      startTime: -1,
+      endTime: -1,
+    }))
+  }
+
+  // Helper: Count Chinese characters (Chinese = 1, ASCII = 0.5)
+  function getChineseCharCount(text: string): number {
+    let count = 0
+    for (const char of text) {
+      if (char.charCodeAt(0) > 127) {
+        count++
+      } else {
+        count += 0.5
+      }
+    }
+    return Math.ceil(count)
+  }
+
+  // Helper: Split long segment into smaller chunks
+  function splitLongSegment(text: string, maxChars: number): string[] {
+    const results: string[] = []
+    let current = ''
+
+    for (const char of text) {
+      current += char
+      if (getChineseCharCount(current) >= maxChars) {
+        results.push(current)
+        current = ''
+      }
+    }
+
+    if (current.length > 0) {
+      // If too short, merge with previous segment
+      if (results.length > 0 && getChineseCharCount(current) < 3) {
+        results[results.length - 1] += current
+      } else {
+        results.push(current)
+      }
+    }
+
+    return results
+  }
+
+  // Helper: Clean text by removing punctuation and extra spaces
+  function cleanSegmentText(text: string): string {
+    return text
+      .replace(/[，。！？、；：""''（）【】《》,\.!?\-—\[\]「」『』：\s]+/g, '')
+      .trim()
   }
 
   // Load from history record
-  function loadFromHistory(item: GenerationRecord) {
+  async function loadFromHistory(item: GenerationRecord) {
     // 開始載入
     isLoadingFromHistory.value = true
 
@@ -251,19 +294,47 @@ export const useGenerationStore = defineStore('generation', () => {
       subtitleBackground: subtitleConfig.background,
     }
 
-    // Set generated result to show in preview
-    generatedResult.value = item
-
     // Reset generation state
     stage.value = 'complete'
     error.value = null
 
-    // 立即生成快速字幕（毫秒級），不依賴 create.vue 的 watch
-    if (subtitleConfig.enabled && item.transcript) {
+    // 先設置 generatedResult
+    generatedResult.value = item
+
+    // 直接呼叫 Whisper API，不依賴 watch
+    if (subtitleConfig.enabled && item.transcript && item.audioUrl) {
+      isLoadingSubtitles.value = true
+      subtitleSegments.value = []
+      hasTimestamps.value = false
+      console.log('[Subtitle] Calling Whisper API for:', item.audioUrl.substring(0, 60))
+
+      try {
+        const result = await $fetch('/api/subtitle', {
+          method: 'POST',
+          body: {
+            audioUrl: item.audioUrl,
+            transcript: item.transcript,
+          },
+        }) as { segments: TimedSegment[]; hasTimestamps: boolean }
+
+        subtitleSegments.value = result.segments
+        hasTimestamps.value = result.hasTimestamps
+        console.log('[Subtitle] Whisper API success:', result.segments.length, 'segments')
+      } catch (err) {
+        console.warn('[Subtitle] Whisper API failed, using quick subtitles:', err)
+        // Fallback 到快速字幕
+        const quickSegments = simpleTextSegmentation(item.transcript)
+        subtitleSegments.value = quickSegments
+        hasTimestamps.value = false
+      } finally {
+        isLoadingSubtitles.value = false
+      }
+    } else if (subtitleConfig.enabled && item.transcript) {
+      // 沒有 audioUrl 時才用快速字幕（fallback）
       const quickSegments = simpleTextSegmentation(item.transcript)
       subtitleSegments.value = quickSegments
       hasTimestamps.value = false
-      console.log('Quick subtitles generated in store:', quickSegments.length)
+      console.log('No audio URL, using quick subtitles:', quickSegments.length)
     } else {
       subtitleSegments.value = []
       hasTimestamps.value = false

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Play, Pause, RotateCcw, Download, Loader2, VolumeX } from 'lucide-vue-next'
+import { Play, Pause, RotateCcw, Download, Loader2, VolumeX, Mic, Type, Video, Check, Lightbulb } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
+const { stage, isGenerating } = storeToRefs(generationStore)
 const toastStore = useToastStore()
 const { draft, generatedResult, subtitleSegments, hasTimestamps, isLoadingSubtitles, isLoadingFromHistory } = storeToRefs(generationStore)
 
@@ -146,6 +147,76 @@ function handleUnmute() {
 // Track if we should auto-play after loading
 const shouldAutoPlayAfterLoad = ref(false)
 
+// Track pending auto-play (waiting for Whisper to complete)
+const pendingAutoPlay = ref<HTMLMediaElement | null>(null)
+
+// 簡易文字分段（跳過 Whisper 時使用）
+function simpleTextSegmentation(transcript: string) {
+  if (!transcript.trim()) return []
+
+  // 按標點符號分段
+  const punctuationPattern = /[，。！？、；：,\.!?\n]+/g
+  const segments = transcript
+    .split(punctuationPattern)
+    .map(s => s.replace(/[，。！？、；：,\.!?\-—\[\]【】「」『』：""''\s]+/g, '').trim())
+    .filter(s => s.length > 0)
+
+  return segments.map(text => ({
+    text,
+    startTime: -1,
+    endTime: -1,
+  }))
+}
+
+// 跳過 Whisper，使用快速字幕
+function skipWhisperAndUseQuickSubtitles() {
+  if (!generatedResult.value?.transcript) return
+
+  const quickSegments = simpleTextSegmentation(generatedResult.value.transcript)
+  generationStore.setSubtitleSegments(quickSegments, false)
+  generationStore.setLoadingSubtitles(false)
+
+  console.log('Skipped Whisper, using quick subtitles:', quickSegments.length)
+
+  // 如果有待播放的媒體，立即播放
+  if (pendingAutoPlay.value) {
+    tryAutoPlay(pendingAutoPlay.value)
+    pendingAutoPlay.value = null
+  }
+}
+
+// 30 秒後顯示超時提示
+const showTimeoutHint = ref(false)
+let subtitleTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+// When subtitles finish loading (Whisper complete), trigger pending auto-play
+watch(
+  () => isLoadingSubtitles.value,
+  async (loading) => {
+    if (loading) {
+      // 開始計時，30 秒後顯示超時提示
+      showTimeoutHint.value = false
+      subtitleTimeoutId = setTimeout(() => {
+        showTimeoutHint.value = true
+      }, 30000)
+    } else {
+      // 清除計時器
+      if (subtitleTimeoutId) {
+        clearTimeout(subtitleTimeoutId)
+        subtitleTimeoutId = null
+      }
+      showTimeoutHint.value = false
+
+      if (pendingAutoPlay.value) {
+        console.log('Whisper complete, starting auto-play')
+        await nextTick()
+        await tryAutoPlay(pendingAutoPlay.value)
+        pendingAutoPlay.value = null
+      }
+    }
+  }
+)
+
 // Watch for new media - prepare for auto-play but don't play yet if loading from history
 watch(
   () => generatedResult.value,
@@ -197,12 +268,23 @@ const currentSubtitle = computed(() => {
     return segment?.text || ''
   }
 
-  // Fallback: distribute segments evenly across duration
-  const progress = currentTime.value / duration.value
-  const segmentIndex = Math.floor(progress * subtitleSegments.value.length)
-  const segment = subtitleSegments.value[Math.min(segmentIndex, subtitleSegments.value.length - 1)]
+  // Fallback: distribute segments by character count (longer text = more time)
+  const totalChars = subtitleSegments.value.reduce((sum, seg) => sum + seg.text.length, 0)
+  if (totalChars === 0) return ''
 
-  return segment?.text || ''
+  let accumulatedChars = 0
+  for (const segment of subtitleSegments.value) {
+    const segmentStart = (accumulatedChars / totalChars) * duration.value
+    const segmentEnd = ((accumulatedChars + segment.text.length) / totalChars) * duration.value
+
+    if (currentTime.value >= segmentStart && currentTime.value < segmentEnd) {
+      return segment.text
+    }
+    accumulatedChars += segment.text.length
+  }
+
+  // Return last segment if we're past all calculated times
+  return subtitleSegments.value[subtitleSegments.value.length - 1]?.text || ''
 })
 
 // Determine if we should show video or audio-only playback
@@ -251,8 +333,17 @@ async function onLoadedMetadata(event: Event) {
     // 如果需要在 loading 消失後自動播放
     if (shouldAutoPlayAfterLoad.value) {
       shouldAutoPlayAfterLoad.value = false
-      await nextTick() // 等待 loading overlay 消失
-      await tryAutoPlay(media)
+
+      // 等待字幕載入完成（Whisper）後才播放
+      // 這樣才能確保字幕時間戳準確
+      if (isLoadingSubtitles.value) {
+        console.log('Media ready, waiting for Whisper to complete before auto-play')
+        pendingAutoPlay.value = media
+      } else {
+        // 字幕已經載入完成，直接播放
+        await nextTick()
+        await tryAutoPlay(media)
+      }
     }
   }
 }
@@ -385,6 +476,96 @@ async function downloadWithSubtitles(videoUrl: string) {
     isDownloading.value = false
   }
 }
+
+// ============================================
+// Generation Progress Overlay
+// ============================================
+const encouragingMessages = [
+  'AI 正在努力搬磚中...',
+  '去泡杯咖啡吧！',
+  '好東西值得等待...',
+  '正在施展魔法 ✨',
+  '快好了，再等一下下...',
+  '您的創意即將成真...',
+  '深呼吸，放輕鬆...',
+]
+
+const currentMessageIndex = ref(0)
+const currentMessage = computed(() => encouragingMessages[currentMessageIndex.value])
+
+// 文字輪播計時器
+let messageTimer: ReturnType<typeof setInterval> | null = null
+
+watch(isGenerating, (generating) => {
+  if (generating) {
+    currentMessageIndex.value = 0
+    messageTimer = setInterval(() => {
+      currentMessageIndex.value = (currentMessageIndex.value + 1) % encouragingMessages.length
+    }, 6000)
+  } else {
+    if (messageTimer) {
+      clearInterval(messageTimer)
+      messageTimer = null
+    }
+    currentMessageIndex.value = 0
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (messageTimer) {
+    clearInterval(messageTimer)
+  }
+})
+
+// 階段索引計算
+const progressStageIndex = computed(() => {
+  const stageMap: Record<string, number> = { voice: 0, subtitle: 1, video: 2 }
+  return stageMap[stage.value] ?? -1
+})
+
+// 節點樣式
+function getNodeClass(index: number) {
+  const base = 'w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300'
+  if (index < progressStageIndex.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500 text-white`
+  }
+  if (index === progressStageIndex.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500 text-white animate-pulse ring-4 ring-purple-400/30`
+  }
+  return `${base} bg-white/20 text-white/50`
+}
+
+// 連接線樣式
+function getLineClass(index: number) {
+  const base = 'w-6 h-1 rounded-full transition-all duration-300'
+  if (index < progressStageIndex.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500`
+  }
+  return `${base} bg-white/20`
+}
+
+// 預估時間計算
+const stageEstimates: Record<string, number> = { voice: 15, subtitle: 8, video: 120 }
+
+const remainingSeconds = computed(() => {
+  const stages = ['voice', 'subtitle', 'video']
+  const idx = progressStageIndex.value
+  if (idx < 0) return 0
+  let total = 0
+  for (let i = idx; i < stages.length; i++) {
+    total += stageEstimates[stages[i]]
+  }
+  return total
+})
+
+const formattedRemainingTime = computed(() => {
+  const secs = remainingSeconds.value
+  if (secs <= 0) return '即將完成'
+  if (secs < 60) return `${secs} 秒`
+  const mins = Math.floor(secs / 60)
+  const remainSecs = secs % 60
+  return remainSecs > 0 ? `${mins} 分 ${remainSecs} 秒` : `${mins} 分鐘`
+})
 </script>
 
 <template>
@@ -708,7 +889,22 @@ async function downloadWithSubtitles(videoUrl: string) {
       >
         <div class="flex flex-col items-center gap-3">
           <Loader2 class="w-8 h-8 text-white animate-spin" />
-          <span class="text-white text-sm">載入字幕中...</span>
+          <span class="text-white text-sm">正在分析字幕時間點...</span>
+          <span v-if="!showTimeoutHint" class="text-white/60 text-xs">預計需要 5-15 秒</span>
+          <!-- 超時提示 -->
+          <span v-if="showTimeoutHint" class="text-amber-400 text-xs">處理時間較長，建議跳過</span>
+          <!-- 跳過按鈕 -->
+          <button
+            :class="[
+              'mt-2 px-3 py-1 text-xs rounded-full transition-colors',
+              showTimeoutHint
+                ? 'bg-amber-500 text-black hover:bg-amber-400'
+                : 'text-white/70 border border-white/30 hover:bg-white/10'
+            ]"
+            @click="skipWhisperAndUseQuickSubtitles"
+          >
+            跳過，使用快速字幕
+          </button>
         </div>
       </div>
 
@@ -721,6 +917,64 @@ async function downloadWithSubtitles(videoUrl: string) {
           <Loader2 class="w-8 h-8 text-white animate-spin" />
           <span class="text-white text-sm">{{ ffmpeg.retryStatus.value }}</span>
         </div>
+      </div>
+
+      <!-- Generation Progress Overlay -->
+      <div
+        v-if="isGenerating"
+        class="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-30 p-6"
+      >
+        <!-- 進度節點時間軸 -->
+        <div class="flex items-center gap-1 mb-6">
+          <!-- 語音節點 -->
+          <div class="flex flex-col items-center gap-1.5">
+            <div :class="getNodeClass(0)">
+              <Check v-if="progressStageIndex > 0" class="w-5 h-5" />
+              <Mic v-else class="w-5 h-5" />
+            </div>
+            <span class="text-white/60 text-xs">語音</span>
+          </div>
+
+          <!-- 連接線 1 -->
+          <div :class="getLineClass(0)" class="mb-5" />
+
+          <!-- 字幕節點 -->
+          <div class="flex flex-col items-center gap-1.5">
+            <div :class="getNodeClass(1)">
+              <Check v-if="progressStageIndex > 1" class="w-5 h-5" />
+              <Type v-else class="w-5 h-5" />
+            </div>
+            <span class="text-white/60 text-xs">字幕</span>
+          </div>
+
+          <!-- 連接線 2 -->
+          <div :class="getLineClass(1)" class="mb-5" />
+
+          <!-- 影片節點 -->
+          <div class="flex flex-col items-center gap-1.5">
+            <div :class="getNodeClass(2)">
+              <Check v-if="progressStageIndex > 2" class="w-5 h-5" />
+              <Video v-else class="w-5 h-5" />
+            </div>
+            <span class="text-white/60 text-xs">影片</span>
+          </div>
+        </div>
+
+        <!-- 鼓勵文字 -->
+        <p class="text-white text-lg font-medium mb-3">
+          {{ currentMessage }}
+        </p>
+
+        <!-- 預估時間 -->
+        <p class="text-white/70 text-sm mb-4">
+          預估還需 {{ formattedRemainingTime }}
+        </p>
+
+        <!-- 提示 -->
+        <p class="text-white/50 text-xs flex items-center gap-1.5">
+          <Lightbulb class="w-3.5 h-3.5" />
+          去做其他事吧，完成後會通知你
+        </p>
       </div>
     </div>
 
