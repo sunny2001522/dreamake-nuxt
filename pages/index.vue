@@ -27,6 +27,9 @@ async function handleStartClick() {
     <!-- Steps Section -->
     <LandingStepsSection />
 
+    <!-- All-In-One Section -->
+    <LandingAllInOneSection />
+
     <!-- Demo Section -->
     <LandingDemoSection />
 
@@ -36,8 +39,6 @@ async function handleStartClick() {
     <!-- Stats Section -->
     <LandingStatsSection />
 
-    <!-- Security Section -->
-    <LandingSecuritySection />
 
     <!-- CTA Section -->
     <LandingCTASection @start="handleStartClick" />

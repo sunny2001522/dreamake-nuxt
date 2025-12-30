@@ -33,15 +33,7 @@ const videos = [exampleFemale, exampleAnime, exampleMale];
       class="relative z-10 container mx-auto py-10 px-4 md:flex gap-6 justify-around items-center"
     >
       <div class="text-center">
-        <!-- Badge -->
-        <div
-          class="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm mb-8"
-        >
-          <Clapperboard class="w-4 h-4 text-purple-600" />
-          <span class="text-sm font-medium text-purple-600"
-            >免費 AI 影片生成器</span
-          >
-        </div>
+       
 
         <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold mb-6">
           <span class="gradient-text">DreaMake</span>
@@ -56,28 +48,25 @@ const videos = [exampleFemale, exampleAnime, exampleMale];
         </p>
 
         <!-- Features Tags -->
-        <div class="flex flex-wrap justify-center gap-3 mb-10">
-          <span
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-white/60 backdrop-blur rounded-full text-sm text-stone-600"
-          >
+        <div
+          class="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 mb-10 text-stone-500 text-sm"
+        >
+          <span class="inline-flex items-center gap-1">
             <Mic class="w-4 h-4" />
             語音克隆
           </span>
-          <span
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-white/60 backdrop-blur rounded-full text-sm text-stone-600"
-          >
+          <span class="text-stone-300">·</span>
+          <span class="inline-flex items-center gap-1">
             <Image class="w-4 h-4" />
             AI 虛擬人物
           </span>
-          <span
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-white/60 backdrop-blur rounded-full text-sm text-stone-600"
-          >
+          <span class="text-stone-300">·</span>
+          <span class="inline-flex items-center gap-1">
             <FileText class="w-4 h-4" />
             AI 腳本生成
           </span>
-          <span
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-white/60 backdrop-blur rounded-full text-sm text-stone-600"
-          >
+          <span class="text-stone-300">·</span>
+          <span class="inline-flex items-center gap-1">
             <Clapperboard class="w-4 h-4" />
             自動字幕
           </span>
