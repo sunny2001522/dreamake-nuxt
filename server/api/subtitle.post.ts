@@ -7,35 +7,21 @@ import { transcribeAudio, isWhisperAvailable, alignTranscriptWithWhisperTimings 
  *
  * Generates timed subtitle segments from audio.
  * Priority: OpenAI Whisper API (accurate) -> Gemini AI (fallback) -> Text-only (last resort)
+ *
+ * 優化：接收 audioUrl 而非音檔，後端直接下載（減少前端下載+上傳的雙重傳輸時間）
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
+  // === 效能追蹤 ===
+  const timings: Record<string, number> = {}
+  const startTime = Date.now()
+
   try {
-    const formData = await readMultipartFormData(event)
-
-    if (!formData) {
-      throw createError({
-        statusCode: 400,
-        message: 'No form data received',
-      })
-    }
-
-    // Extract fields
-    let audioFile: { data: Buffer; filename: string; type: string } | null = null
-    let transcript: string | null = null
-
-    for (const field of formData) {
-      if (field.name === 'audio' && field.data) {
-        audioFile = {
-          data: field.data,
-          filename: field.filename || 'audio.mp3',
-          type: field.type || 'audio/mpeg',
-        }
-      } else if (field.name === 'transcript') {
-        transcript = field.data.toString('utf-8')
-      }
-    }
+    // 讀取 JSON body（改為接收 URL 而非檔案）
+    const body = await readBody(event)
+    const { audioUrl, transcript } = body as { audioUrl?: string; transcript: string }
+    timings['parseBody'] = Date.now() - startTime
 
     if (!transcript) {
       throw createError({
@@ -44,35 +30,95 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 從 URL 下載音檔（後端直接下載，比前端上傳快很多）
+    let audioFile: { data: Buffer; filename: string; type: string } | null = null
+
+    if (audioUrl) {
+      try {
+        const downloadStart = Date.now()
+        console.log('[Timing] Downloading audio from URL...', audioUrl.substring(0, 80))
+
+        // 30 秒超時，避免音檔下載卡住
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+        let audioResponse: Response
+        try {
+          audioResponse = await fetch(audioUrl, { signal: controller.signal })
+        } catch (err: any) {
+          clearTimeout(timeoutId)
+          if (err.name === 'AbortError') {
+            throw new Error('Audio download timeout: 下載超過 30 秒')
+          }
+          throw err
+        }
+        clearTimeout(timeoutId)
+
+        if (!audioResponse.ok) {
+          throw new Error(`Failed to download audio: ${audioResponse.status}`)
+        }
+
+        const audioBuffer = Buffer.from(await audioResponse.arrayBuffer())
+        const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg'
+        timings['downloadAudio'] = Date.now() - downloadStart
+
+        // 從 URL 提取檔名或使用預設值
+        const urlPath = new URL(audioUrl).pathname
+        const filename = urlPath.split('/').pop() || 'audio.mp3'
+
+        audioFile = {
+          data: audioBuffer,
+          filename,
+          type: contentType,
+        }
+
+        console.log(`[Timing] Audio downloaded: ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB in ${timings['downloadAudio']}ms`)
+      } catch (downloadErr) {
+        console.error('Failed to download audio:', downloadErr)
+        // 繼續嘗試其他方法（Gemini 或 text-only）
+      }
+    }
+
     // ============================================
     // Priority 1: OpenAI Whisper API (most accurate)
     // ============================================
     if (audioFile && isWhisperAvailable()) {
       try {
-        console.log('Attempting Whisper transcription...')
+        const whisperStart = Date.now()
+        console.log('[Timing] Starting Whisper transcription...')
 
         const whisperResult = await transcribeAudio(
           audioFile.data,
           audioFile.filename,
           'zh' // Traditional Chinese
         )
+        timings['whisperAPI'] = Date.now() - whisperStart
+        console.log(`[Timing] Whisper API took: ${timings['whisperAPI']}ms`)
 
         if (whisperResult.words && whisperResult.words.length > 0) {
           // Use alignTranscriptWithWhisperTimings to preserve original Traditional Chinese text
           // while using Whisper's accurate timestamps (avoids Simplified Chinese conversion)
+          const alignStart = Date.now()
           const segments = alignTranscriptWithWhisperTimings(transcript, whisperResult.words)
-          console.log(`Whisper success (aligned with original text): ${segments.length} segments, duration=${whisperResult.duration}s`)
+          timings['alignTimings'] = Date.now() - alignStart
+          timings['total'] = Date.now() - startTime
+
+          console.log('=== Subtitle API Timings ===')
+          console.log(JSON.stringify(timings, null, 2))
+          console.log(`Whisper success: ${segments.length} segments, duration=${whisperResult.duration}s`)
 
           return {
             segments,
             hasTimestamps: true,
             source: 'whisper',
-            duration: whisperResult.duration
+            duration: whisperResult.duration,
+            timings  // 回傳給前端看
           }
         }
 
         console.warn('Whisper returned no words, falling back to Gemini')
       } catch (whisperError) {
+        timings['whisperError'] = Date.now() - startTime
         console.error('Whisper API error:', whisperError)
         // Fall through to Gemini
       }

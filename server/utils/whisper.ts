@@ -81,13 +81,28 @@ export async function transcribeAudio(
 
   console.log(`Calling Whisper API: file=${filename}, language=${language}`)
 
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: formData,
-  })
+  // 60 秒超時，避免 Whisper API 無限等待
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+  let response: Response
+  try {
+    response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+      signal: controller.signal,
+    })
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    if (err.name === 'AbortError') {
+      throw new Error('Whisper API timeout: 請求超過 60 秒')
+    }
+    throw err
+  }
+  clearTimeout(timeoutId)
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -337,7 +352,13 @@ export function alignTranscriptWithWhisperTimings(
   let charOffset = 0
 
   for (const text of textSegments) {
-    const segmentCharCount = text.length
+    // FIX: Calculate cleaned segment length to match cleanedTranscript
+    // This ensures charOffset accumulates correctly relative to totalCleanedChars
+    const cleanedSegmentText = text.replace(/[，。！？、；：,\.!?\-—\[\]【】「」『』：""''\s]/g, '')
+    const segmentCharCount = cleanedSegmentText.length
+
+    // Skip empty segments after cleaning
+    if (segmentCharCount === 0) continue
 
     // Map start position to Whisper timeline
     const startIdx = Math.min(
@@ -352,13 +373,20 @@ export function alignTranscriptWithWhisperTimings(
       whisperTimeline.length - 1
     )
 
-    const startTime = whisperTimeline[startIdx].time
-    const endTime = endIdx < whisperTimeline.length - 1
+    // 原始時間戳
+    const rawStartTime = whisperTimeline[startIdx].time
+    const rawEndTime = endIdx < whisperTimeline.length - 1
       ? whisperTimeline[endIdx].endTime
       : lastWordEnd
 
+    // 加入延遲補償（原專案 lib/api.ts 的 WHISPER_DELAY）
+    // Whisper 時間戳通常比實際語音稍微提前，需要補償
+    const WHISPER_DELAY = 0.1 // 100ms 延遲
+    const startTime = Math.max(0, rawStartTime + WHISPER_DELAY)
+    const endTime = rawEndTime + WHISPER_DELAY
+
     segments.push({
-      text,
+      text: cleanedSegmentText,  // Use cleaned text for consistency
       startTime,
       endTime
     })
