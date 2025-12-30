@@ -332,7 +332,7 @@ onMounted(loadVideos)
     <!-- History List -->
     <div v-else class="flex-1 overflow-y-auto p-4 pb-8">
       <div class="max-w-6xl mx-auto">
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
           <div
             v-for="item in videos"
             :key="item.id"
