@@ -33,6 +33,70 @@ function setVideoModel(model: VideoModel) {
 const videoGeneration = useVideoGeneration()
 const { uploadVideoToStorage, createVideo } = useVideoStorage()
 
+// Subtitle generation helper
+async function generateSubtitles(audioUrl: string, transcript: string) {
+  if (!draft.value.subtitleEnabled) return
+
+  const startTime = Date.now()
+  console.log('[Subtitle] Start generating...', { audioUrl: audioUrl.substring(0, 50) })
+
+  try {
+    generationStore.setLoadingSubtitles(true)
+
+    const response = await $fetch('/api/subtitle', {
+      method: 'POST',
+      body: { audioUrl, transcript },
+    })
+
+    const result = response as {
+      segments: Array<{ text: string; startTime: number; endTime: number }>
+      hasTimestamps: boolean
+      source: string
+    }
+
+    generationStore.setSubtitleSegments(result.segments, result.hasTimestamps)
+    console.log(`[Subtitle] Completed in ${Date.now() - startTime}ms`, {
+      count: result.segments.length,
+      hasTimestamps: result.hasTimestamps,
+      source: result.source,
+    })
+  } catch (err) {
+    console.error('[Subtitle] Failed:', err)
+    // Fallback: generate simple text segments
+    const segments = simpleTextSegmentation(transcript)
+    generationStore.setSubtitleSegments(segments, false)
+  } finally {
+    generationStore.setLoadingSubtitles(false)
+  }
+}
+
+// Simple text segmentation fallback
+function simpleTextSegmentation(transcript: string) {
+  const cleanText = transcript.replace(/[，。！？、；：""''（）【】《》\s]+/g, '').trim()
+  if (!cleanText) return []
+
+  const segments: Array<{ text: string; startTime: number; endTime: number }> = []
+  const maxChars = 10
+
+  let i = 0
+  while (i < cleanText.length) {
+    const remainingChars = cleanText.length - i
+    let segmentLength = Math.min(maxChars, remainingChars)
+    if (remainingChars <= maxChars) {
+      segmentLength = remainingChars
+    } else if (remainingChars - maxChars < 6) {
+      segmentLength = Math.ceil(remainingChars / 2)
+    }
+    segments.push({
+      text: cleanText.slice(i, i + segmentLength),
+      startTime: -1,
+      endTime: -1,
+    })
+    i += segmentLength
+  }
+  return segments
+}
+
 // Check if generation can proceed
 const canGenerate = computed(() => {
   return (
@@ -74,6 +138,12 @@ async function handleGenerateVoiceOnly() {
     // Generate voice TTS
     const speakerId = draft.value.voicePreview!.speakerId!
     const result = await videoGeneration.generateVoice(speakerId, draft.value.transcript)
+
+    // Generate subtitles from audio
+    if (draft.value.subtitleEnabled) {
+      generationStore.setStage('subtitle')
+      await generateSubtitles(result.audioUrl, draft.value.transcript)
+    }
 
     // Create audio-only record
     const record: GenerationRecord = {
@@ -137,6 +207,12 @@ async function handleGenerateVideo() {
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
     })
+
+    // Generate subtitles in parallel with video generation
+    if (draft.value.subtitleEnabled) {
+      generationStore.setStage('subtitle')
+      await generateSubtitles(result.audioUrl, draft.value.transcript)
+    }
 
     // Poll for completion
     generationStore.setStage('video')
