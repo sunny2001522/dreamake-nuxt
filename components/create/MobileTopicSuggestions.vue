@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { SuggestedTopic, MediaPlatform, DbPersona } from '~/types'
+import { Gem } from 'lucide-vue-next'
+
+// Channel analysis Token cost
+const ANALYSIS_TOKEN_COST = 1
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -540,6 +544,9 @@ function parseAnalysisTitle(analysis: string): string | null {
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               {{ isAnalyzing ? '分析中...' : '開始分析' }}
+              <span v-if="!isAnalyzing" class="flex items-center gap-0.5 text-white/80">
+                <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
+              </span>
             </button>
           </div>
         </div>

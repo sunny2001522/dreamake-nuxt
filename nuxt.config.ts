@@ -74,6 +74,8 @@ export default defineNuxtConfig({
     '/logout': { ssr: false }, // OIDC callback needs client-side only
     '/refresh': { ssr: false }, // OIDC callback needs client-side only
     '/admin': { ssr: false },  // Admin dashboard needs client-side only
+    '/account': { ssr: false }, // Account page needs client-side only
+    '/pricing': { ssr: false }, // Pricing page with dynamic plans
   },
 
   nitro: {

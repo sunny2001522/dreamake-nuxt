@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import type { GenerationRecord, AspectRatio, VideoModel } from '~/types'
-import { Smartphone, Monitor } from 'lucide-vue-next'
+import { Smartphone, Monitor, Gem } from 'lucide-vue-next'
+import {
+  VIDEO_TOKEN_COSTS,
+  calculateVideoTokenCost,
+  estimateDurationFromTranscript,
+} from '~/types/subscription'
+
+// Base Token costs
+const VIDEO_BASE_TOKEN = 2
+const VOICE_BASE_TOKEN = 1
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
@@ -16,10 +25,40 @@ const aspectRatioOptions: { value: AspectRatio; label: string; icon: any }[] = [
 ]
 
 // Video model options
-const videoModelOptions: { value: VideoModel; label: string }[] = [
-  { value: 'vidnoz', label: '一般品質' },
-  { value: 'wavespeed', label: '高品質' },
+const videoModelOptions: { value: VideoModel; label: string; tokenCost: number }[] = [
+  { value: 'vidnoz', label: '一般品質', tokenCost: VIDEO_TOKEN_COSTS.vidnoz.perMinute },
+  { value: 'wavespeed', label: '高品質', tokenCost: VIDEO_TOKEN_COSTS.wavespeed.perMinute },
 ]
+
+// 預估 Token 消耗
+const estimatedDurationSeconds = computed(() => {
+  return estimateDurationFromTranscript(draft.value.transcript)
+})
+
+const estimatedVideoTokenCost = computed(() => {
+  const model = draft.value.videoModel as 'wavespeed' | 'vidnoz'
+  return VIDEO_BASE_TOKEN + calculateVideoTokenCost(model, estimatedDurationSeconds.value)
+})
+
+// 語音 Token 消耗計算 (基礎 + 時長計算)
+const estimatedVoiceTokenCost = computed(() => {
+  // 語音使用 vidnoz 的費率計算
+  return VOICE_BASE_TOKEN + calculateVideoTokenCost('vidnoz', estimatedDurationSeconds.value)
+})
+
+// 格式化時長顯示
+const formattedDuration = computed(() => {
+  const seconds = estimatedDurationSeconds.value
+  if (seconds < 60) {
+    return `${seconds} 秒`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (remainingSeconds === 0) {
+    return `${minutes} 分鐘`
+  }
+  return `${minutes} 分 ${remainingSeconds} 秒`
+})
 
 function setAspectRatio(ratio: AspectRatio) {
   generationStore.updateDraft({ aspectRatio: ratio })
@@ -517,6 +556,9 @@ async function handleContinueToVideo() {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
         </svg>
         語音
+        <span v-if="!isGenerating" class="flex items-center gap-0.5 text-stone-500">
+          <Gem class="w-3 h-3" />{{ estimatedVoiceTokenCost }}
+        </span>
       </button>
 
       <!-- Full video button -->
@@ -533,6 +575,9 @@ async function handleContinueToVideo() {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
         影片
+        <span v-if="!isGenerating" class="flex items-center gap-0.5 text-white/80">
+          <Gem class="w-3 h-3" />{{ estimatedVideoTokenCost }}
+        </span>
       </button>
     </div>
   </div>

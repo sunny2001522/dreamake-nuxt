@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { Gem } from 'lucide-vue-next'
 import type { VideoModel } from '~/types'
+import { VIDEO_TOKEN_COSTS } from '~/types/subscription'
 
 const generationStore = useGenerationStore()
 const { draft } = storeToRefs(generationStore)
 
-const models: { value: VideoModel; label: string }[] = [
-  { value: 'vidnoz', label: '一般品質' },
-  { value: 'wavespeed', label: '高品質' },
+const models: { value: VideoModel; label: string; tokenCost: number }[] = [
+  { value: 'vidnoz', label: '一般品質', tokenCost: VIDEO_TOKEN_COSTS.vidnoz.perMinute },
+  { value: 'wavespeed', label: '高品質', tokenCost: VIDEO_TOKEN_COSTS.wavespeed.perMinute },
 ]
 
 const DEFAULT_WAVESPEED_PROMPT = '對著鏡頭講話，侃侃而談，搭配手部動作，輕鬆而自然'
@@ -24,16 +26,45 @@ function setWaveSpeedPrompt(prompt: string) {
   <div class="card p-4">
     <!-- 影片品質選擇 -->
     <div :class="{ 'mb-4': draft.videoModel === 'wavespeed' }">
-      <label class="text-sm font-medium text-stone-700 mb-2 block">影片品質</label>
-      <select
-        :value="draft.videoModel"
-        class="w-full bg-white border border-stone-300 text-stone-900 rounded-lg focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500 py-2.5 px-3 cursor-pointer"
-        @change="setVideoModel(($event.target as HTMLSelectElement).value as VideoModel)"
-      >
-        <option v-for="model in models" :key="model.value" :value="model.value">
-          {{ model.label }}
-        </option>
-      </select>
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-sm font-medium text-stone-700">影片品質</label>
+        <!-- Token 每分鐘費率顯示 -->
+        <span class="flex items-center gap-1 text-xs text-purple-600">
+          <Gem class="w-3 h-3" />
+          <span>{{ models.find(m => m.value === draft.videoModel)?.tokenCost }} /分鐘</span>
+        </span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          v-for="model in models"
+          :key="model.value"
+          :class="[
+            'relative flex flex-col items-center justify-center py-3 px-4 rounded-lg border-2 transition-all',
+            draft.videoModel === model.value
+              ? 'border-purple-500 bg-purple-50'
+              : 'border-stone-200 hover:border-stone-300 bg-white',
+          ]"
+          @click="setVideoModel(model.value)"
+        >
+          <span
+            :class="[
+              'text-sm font-medium',
+              draft.videoModel === model.value ? 'text-purple-700' : 'text-stone-700',
+            ]"
+          >
+            {{ model.label }}
+          </span>
+          <span
+            :class="[
+              'flex items-center gap-0.5 text-xs mt-1',
+              draft.videoModel === model.value ? 'text-purple-500' : 'text-stone-400',
+            ]"
+          >
+            <Gem class="w-3 h-3" />
+            {{ model.tokenCost }}
+          </span>
+        </button>
+      </div>
     </div>
 
     <!-- 動作描述 (只在高品質時顯示) -->
