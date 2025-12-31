@@ -78,8 +78,9 @@ CREATE INDEX IF NOT EXISTS idx_token_transactions_user_id ON token_transactions(
 CREATE INDEX IF NOT EXISTS idx_token_transactions_created_at ON token_transactions(created_at DESC);
 
 -- 插入初始方案資料
+-- 免費方案：30 Token 永久額度（不會每月重置）
 INSERT INTO subscription_plans (code, name, price, tokens_monthly, features, sort_order) VALUES
-('free', '免費方案', 0, 100, '["AI 語音生成", "AI 頭像說話", "基礎字幕", "720p 輸出"]', 0),
+('free', '免費方案', 0, 30, '["AI 語音生成", "AI 頭像說話", "基礎字幕", "720p 輸出"]', 0),
 ('creator', '創作者方案', 899, 1000, '["所有免費功能", "語音克隆", "進階字幕樣式", "1080p HD 輸出", "優先處理"]', 10)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,

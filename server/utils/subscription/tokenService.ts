@@ -163,8 +163,8 @@ export async function initializeUserSubscription(userId: string): Promise<{
   const supabase = getSupabaseAdmin()
 
   const now = new Date()
-  const periodEnd = new Date(now)
-  periodEnd.setDate(periodEnd.getDate() + 30)
+  // 免費方案永久有效，設定為很遠的未來日期
+  const periodEnd = new Date('2099-12-31T23:59:59Z')
 
   // 獲取免費方案的 Token 配額
   const { data: freePlan } = await supabase
@@ -173,7 +173,7 @@ export async function initializeUserSubscription(userId: string): Promise<{
     .eq('code', 'free')
     .single()
 
-  const tokensMonthly = freePlan?.tokens_monthly || 100
+  const tokensMonthly = freePlan?.tokens_monthly || 30
 
   // 建立用戶訂閱
   const { data: subscription, error: subError } = await supabase
@@ -244,7 +244,31 @@ async function renewUserPeriod(userId: string): Promise<TokenBalance> {
 
   // 獲取用戶方案
   const plan = await getUserPlan(userId)
-  const tokensMonthly = plan?.tokensMonthly || 100
+
+  // 免費方案不重置 Token，直接返回現有餘額
+  if (plan?.code === 'free') {
+    const { data } = await supabase
+      .from('token_balances')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (data) {
+      const dbBalance = data as DbTokenBalance
+      return {
+        id: dbBalance.id,
+        userId: dbBalance.user_id,
+        balance: dbBalance.balance,
+        tokensUsedThisPeriod: dbBalance.tokens_used_this_period,
+        tokensGrantedThisPeriod: dbBalance.tokens_granted_this_period,
+        periodStart: dbBalance.period_start,
+        periodEnd: dbBalance.period_end,
+        updatedAt: dbBalance.updated_at,
+      }
+    }
+  }
+
+  const tokensMonthly = plan?.tokensMonthly || 30
 
   const now = new Date()
   const periodEnd = new Date(now)
