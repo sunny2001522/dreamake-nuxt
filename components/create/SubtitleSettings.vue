@@ -106,7 +106,10 @@ const currentBackgroundLabel = computed(() => {
       </button>
     </div>
 
-    <div v-if="draft.subtitleEnabled" class="flex gap-2">
+    <div
+      class="flex flex-col sm:flex-row gap-2 transition-opacity"
+      :class="draft.subtitleEnabled ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+    >
       <!-- Font Dropdown -->
       <div ref="fontDropdownRef" class="relative flex-1">
         <button
@@ -119,7 +122,7 @@ const currentBackgroundLabel = computed(() => {
           "
           @click="toggleFontDropdown"
         >
-          <span>{{ currentFontLabel }}</span>
+          <span class="whitespace-nowrap truncate">{{ currentFontLabel }}</span>
           <ChevronDown
             class="w-4 h-4 text-stone-400 transition-transform"
             :class="fontDropdownOpen ? 'rotate-180' : ''"
@@ -167,7 +170,7 @@ const currentBackgroundLabel = computed(() => {
           "
           @click="toggleBackgroundDropdown"
         >
-          <span>{{ currentBackgroundLabel }}</span>
+          <span class="whitespace-nowrap truncate">{{ currentBackgroundLabel }}</span>
           <ChevronDown
             class="w-4 h-4 text-stone-400 transition-transform"
             :class="backgroundDropdownOpen ? 'rotate-180' : ''"

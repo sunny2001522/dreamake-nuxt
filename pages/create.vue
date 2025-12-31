@@ -481,8 +481,8 @@ async function handleGenerateVideo() {
             <ImageUploader ref="imageUploaderRef" />
 
             <!-- 右邊：聲音 + 字幕設定垂直排列 -->
-            <div class="flex flex-col gap-3">
-              <VoicePicker />
+            <div class="flex flex-col gap-3 h-full">
+              <VoicePicker class="flex-1" />
               <CreateSubtitleSettings />
             </div>
           </div>

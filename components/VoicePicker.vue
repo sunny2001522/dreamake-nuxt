@@ -520,7 +520,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="card p-4">
+  <div class="card p-4 h-full flex flex-col">
     <div class="flex items-center justify-between mb-3">
       <label class="text-sm font-medium text-stone-700">聲音</label>
       <span class="text-xs text-stone-400">選擇要模仿的人聲</span>
