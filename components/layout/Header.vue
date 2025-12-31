@@ -1,10 +1,26 @@
 <script setup lang="ts">
-import { User } from 'lucide-vue-next'
+import { User, Gem } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
 
 const { $manager } = useNuxtApp()
 const authStore = useAuthStore()
+const subscriptionStore = useSubscriptionStore()
 const route = useRoute()
+
+const { tokenBalance, isLowBalance, isCriticalBalance, planName, isInitialized } = storeToRefs(subscriptionStore)
+
+// 當用戶登入時載入訂閱資訊
+watch(
+  () => authStore.user,
+  async (user) => {
+    if (user && authStore.authInfo.sub) {
+      await subscriptionStore.loadSubscription(authStore.authInfo.sub)
+    } else {
+      subscriptionStore.reset()
+    }
+  },
+  { immediate: true }
+)
 
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
@@ -57,6 +73,23 @@ async function handleLogin() {
         <!-- Auth Section -->
         <div class="flex items-center gap-4">
           <template v-if="authStore.user">
+            <!-- Token Balance -->
+            <NuxtLink
+              v-if="isInitialized"
+              to="/account"
+              :class="[
+                'hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                isCriticalBalance
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : isLowBalance
+                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+              ]"
+            >
+              <Gem class="w-4 h-4" />
+              <span>{{ tokenBalance }}</span>
+            </NuxtLink>
+
             <!-- User Avatar -->
             <div ref="menuRef" class="relative">
               <button
@@ -79,7 +112,33 @@ async function handleLogin() {
                     <p v-if="authStore.authInfo.email" class="text-xs text-stone-500 truncate">
                       {{ authStore.authInfo.email }}
                     </p>
+                    <!-- 方案和 Token 顯示 -->
+                    <div v-if="isInitialized" class="flex items-center gap-2 mt-2">
+                      <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">
+                        {{ planName }}
+                      </span>
+                      <span class="flex items-center gap-1 text-xs text-stone-500">
+                        <Gem class="w-3 h-3" />
+                        {{ tokenBalance }}
+                      </span>
+                    </div>
                   </div>
+
+                  <NuxtLink
+                    to="/account"
+                    class="block px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+                    @click="isMenuOpen = false"
+                  >
+                    帳戶設定
+                  </NuxtLink>
+
+                  <NuxtLink
+                    to="/pricing"
+                    class="block px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+                    @click="isMenuOpen = false"
+                  >
+                    升級方案
+                  </NuxtLink>
 
                   <NuxtLink
                     to="/history"

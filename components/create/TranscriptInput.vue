@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { SuggestedTopic, MediaPlatform, DbPersona } from "~/types";
-import { Mic, Sparkles } from "lucide-vue-next";
+import { Mic, Sparkles, Gem } from "lucide-vue-next";
 import SoundWaveIndicator from "~/components/common/SoundWaveIndicator.vue";
+
+// Channel analysis Token cost
+const ANALYSIS_TOKEN_COST = 1;
 
 const generationStore = useGenerationStore();
 const authStore = useAuthStore();
@@ -1012,6 +1015,9 @@ function handleTranscriptMicClick() {
                 />
               </svg>
               {{ isAnalyzing ? "分析中..." : "開始分析" }}
+              <span v-if="!isAnalyzing" class="flex items-center gap-0.5 text-white/80">
+                <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
+              </span>
             </button>
           </div>
         </div>

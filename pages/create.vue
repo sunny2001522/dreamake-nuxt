@@ -9,8 +9,14 @@ definePageMeta({
 const authStore = useAuthStore();
 const generationStore = useGenerationStore();
 const preferencesStore = usePreferencesStore();
+const subscriptionStore = useSubscriptionStore();
 const toastStore = useToastStore();
 const router = useRouter();
+
+// Token 相關
+const showUpgradeModal = ref(false);
+const requiredTokens = ref(0);
+const { tokenBalance } = storeToRefs(subscriptionStore);
 
 const { draft, isGenerating } = storeToRefs(generationStore);
 
@@ -205,6 +211,17 @@ async function handleGenerateVoice() {
     return;
   }
 
+  // Token 檢查
+  const userId = authStore.authInfo.sub;
+  const estimatedMinutes = Math.ceil(draft.value.transcript.length / 200); // 約 200 字/分鐘
+  const tokenCheck = await subscriptionStore.checkTokens(userId, 'voice_tts', estimatedMinutes);
+
+  if (!tokenCheck.sufficient) {
+    requiredTokens.value = tokenCheck.cost;
+    showUpgradeModal.value = true;
+    return;
+  }
+
   try {
     generationStore.resetGeneration();
     generationStore.setStage("voice");
@@ -215,6 +232,12 @@ async function handleGenerateVoice() {
       speakerId,
       draft.value.transcript
     );
+
+    // 消耗 Token
+    await subscriptionStore.consumeTokens(userId, 'voice_tts', {
+      durationMinutes: estimatedMinutes,
+      description: `語音合成: ${draft.value.transcript.substring(0, 20)}...`,
+    });
 
     // Generate subtitles from audio
     if (draft.value.subtitleEnabled) {
@@ -260,6 +283,17 @@ async function handleGenerateVideo() {
     toastStore.error("請先登入帳號以使用生成功能");
     const { $manager } = useNuxtApp();
     await authStore.login($manager as any, "/create");
+    return;
+  }
+
+  // Token 檢查 - 影片生成（按預估時長計算）
+  const userId = authStore.authInfo.sub;
+  const estimatedMinutes = Math.ceil(draft.value.transcript.length / 200); // 約 200 字/分鐘
+  const tokenCheck = await subscriptionStore.checkTokens(userId, 'video_generation', estimatedMinutes);
+
+  if (!tokenCheck.sufficient) {
+    requiredTokens.value = tokenCheck.cost;
+    showUpgradeModal.value = true;
     return;
   }
 
@@ -326,6 +360,13 @@ async function handleGenerateVideo() {
 
     generationStore.setResult(record);
     generationStore.setStage("complete");
+
+    // 消耗 Token
+    await subscriptionStore.consumeTokens(userId, 'video_generation', {
+      durationMinutes: estimatedMinutes,
+      description: `影片生成: ${draft.value.transcript.substring(0, 20)}...`,
+    });
+
     toastStore.success("影片生成完成！");
   } catch (err: any) {
     console.error("Video generation failed:", err);
@@ -434,10 +475,16 @@ async function handleGenerateVideo() {
       <div class="grid grid-cols-2 gap-6 py-3 h-full">
         <!-- Left Column: Inputs -->
         <div class="relative h-full overflow-y-auto space-y-3">
-          <!-- Step 1 & 2: Image and Voice side by side -->
+          <!-- Step 1 & 2: Image on left, Voice + Subtitle on right -->
           <div class="grid grid-cols-2 gap-3">
+            <!-- 左邊：圖片上傳 -->
             <ImageUploader ref="imageUploaderRef" />
-            <VoicePicker />
+
+            <!-- 右邊：聲音 + 字幕設定垂直排列 -->
+            <div class="flex flex-col gap-3 h-full">
+              <VoicePicker class="flex-1" />
+              <CreateSubtitleSettings />
+            </div>
           </div>
 
           <!-- Step 3: Transcript Input (includes PersonaPanel trigger + TopicSuggestions) -->
@@ -445,9 +492,6 @@ async function handleGenerateVideo() {
             :persona-content="personaContent"
             @persona-update="handlePersonaUpdate"
           />
-
-          <!-- Subtitle Settings -->
-          <CreateSubtitleSettings />
 
           <!-- Generate Buttons with inline settings -->
           <CreateGenerateButtons />
@@ -488,6 +532,13 @@ async function handleGenerateVideo() {
 
   <!-- Desktop History Sidebar -->
   <CreateHistorySidebar v-model="showHistorySidebar" />
+
+  <!-- Token 不足升級 Modal -->
+  <CommonUpgradeModal
+    v-model="showUpgradeModal"
+    :required-tokens="requiredTokens"
+    :current-balance="tokenBalance"
+  />
 </template>
 
 <style scoped>

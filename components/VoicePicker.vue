@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { SavedVoice } from '~/types'
 import { ensureCompatibleFormat } from '~/utils/audioConverter'
+import { Gem } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
 const authStore = useAuthStore()
 const preferencesStore = usePreferencesStore()
 const toastStore = useToastStore()
 const { draft } = storeToRefs(generationStore)
+
+// Voice clone Token cost
+const CLONE_TOKEN_COST = 2
 
 // Constants
 const MIN_AUDIO_DURATION = 20
@@ -94,6 +98,16 @@ watch(savedVoices, (voices) => {
 function applyDefaultVoice(voice: SavedVoice) {
   generationStore.setVoice(voice)
 }
+
+// Calculate voice clone Token cost (first one is free)
+const cloneTokenCost = computed(() => {
+  return savedVoices.value.length === 0 ? 0 : CLONE_TOKEN_COST
+})
+
+// Display text for clone cost
+const cloneCostDisplay = computed(() => {
+  return savedVoices.value.length === 0 ? '免費' : null
+})
 
 async function loadSavedVoices() {
   if (!authStore.user) return
@@ -306,6 +320,12 @@ async function cloneVoice(file: File, name: string) {
     formData.append('audio', processedFile)
     formData.append('name', name)
 
+    // Pass userId for Token billing
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+    if (userId) {
+      formData.append('userId', userId)
+    }
+
     const response = await $fetch<{ speakerId: string }>('/api/voice/clone', {
       method: 'POST',
       body: formData,
@@ -329,9 +349,20 @@ async function cloneVoice(file: File, name: string) {
 
     toastStore.success('語音克隆完成！')
     showModal.value = false
+
+    // Refresh Token balance if consumed
+    if (cloneTokenCost.value > 0) {
+      const subscriptionStore = useSubscriptionStore()
+      subscriptionStore.loadSubscription()
+    }
   } catch (err: any) {
     console.error('Voice cloning failed:', err)
-    toastStore.error('語音克隆失敗', err.message || '請稍後再試')
+    // Handle Token insufficient error
+    if (err.statusCode === 402) {
+      toastStore.error('Token 餘額不足', err.message || '請升級方案以繼續克隆語音')
+    } else {
+      toastStore.error('語音克隆失敗', err.message || '請稍後再試')
+    }
   } finally {
     isCloning.value = false
     cloningVoiceName.value = null
@@ -489,7 +520,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="card p-4">
+  <div class="card p-4 h-full flex flex-col">
     <div class="flex items-center justify-between mb-3">
       <label class="text-sm font-medium text-stone-700">聲音</label>
       <span class="text-xs text-stone-400">選擇要模仿的人聲</span>
@@ -602,7 +633,11 @@ onUnmounted(() => {
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-                錄製語音
+                錄製
+                <span v-if="cloneCostDisplay" class="text-xs text-green-600">({{ cloneCostDisplay }})</span>
+                <span v-else class="flex items-center gap-0.5 text-xs text-stone-400">
+                  <Gem class="w-3 h-3" />{{ cloneTokenCost }}
+                </span>
               </button>
               <button
                 class="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all"
@@ -614,7 +649,11 @@ onUnmounted(() => {
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                上傳檔案
+                上傳
+                <span v-if="cloneCostDisplay" class="text-xs text-green-600">({{ cloneCostDisplay }})</span>
+                <span v-else class="flex items-center gap-0.5 text-xs text-stone-400">
+                  <Gem class="w-3 h-3" />{{ cloneTokenCost }}
+                </span>
               </button>
             </div>
           </div>
