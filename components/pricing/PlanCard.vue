@@ -1,29 +1,29 @@
 <script setup lang="ts">
-import { Check, Gem, Crown } from 'lucide-vue-next'
-import type { SubscriptionPlan } from '~/types/subscription'
+import { Check, Gem, Crown } from "lucide-vue-next";
+import type { SubscriptionPlan } from "~/types/subscription";
 
 interface Props {
-  plan: SubscriptionPlan
-  currentPlan?: string
-  loading?: boolean
-  highlighted?: boolean
+  plan: SubscriptionPlan;
+  currentPlan?: string;
+  loading?: boolean;
+  highlighted?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  currentPlan: '',
+  currentPlan: "",
   loading: false,
   highlighted: false,
-})
+});
 
 const emit = defineEmits<{
-  subscribe: [planCode: string]
-}>()
+  subscribe: [planCode: string];
+}>();
 
-const isCurrentPlan = computed(() => props.currentPlan === props.plan.code)
+const isCurrentPlan = computed(() => props.currentPlan === props.plan.code);
 
 function handleClick() {
   if (!isCurrentPlan.value) {
-    emit('subscribe', props.plan.code)
+    emit("subscribe", props.plan.code);
   }
 }
 </script>
@@ -42,34 +42,18 @@ function handleClick() {
       v-if="highlighted"
       class="absolute -top-3 left-1/2 -translate-x-1/2 z-10"
     >
-      <span class="px-4 py-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white text-sm font-medium rounded-full shadow-lg">
+      <span
+        class="px-4 py-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white text-sm font-medium rounded-full shadow-lg"
+      >
         推薦
       </span>
     </div>
 
     <div
-      :class="[
-        'h-full p-8 rounded-2xl',
-        highlighted ? 'bg-white' : 'bg-white',
-      ]"
+      :class="['h-full p-8 rounded-2xl', highlighted ? 'bg-white' : 'bg-white']"
     >
       <!-- 方案圖示和名稱 -->
       <div class="flex items-center gap-3 mb-4">
-        <div
-          :class="[
-            'p-2 rounded-xl',
-            highlighted ? 'bg-purple-100' : 'bg-stone-100',
-          ]"
-        >
-          <Crown
-            v-if="plan.code === 'creator'"
-            :class="['w-6 h-6', highlighted ? 'text-purple-600' : 'text-stone-600']"
-          />
-          <Gem
-            v-else
-            :class="['w-6 h-6', highlighted ? 'text-purple-600' : 'text-stone-600']"
-          />
-        </div>
         <h3 class="text-xl font-bold text-stone-800">{{ plan.name }}</h3>
       </div>
 
@@ -95,7 +79,7 @@ function handleClick() {
           <Gem
             :class="[
               'w-5 h-5',
-              highlighted ? 'text-purple-500' : 'text-amber-500',
+              highlighted ? 'text-purple-500' : 'text-stone-500',
             ]"
           />
           <span
@@ -116,7 +100,7 @@ function handleClick() {
           :key="feature"
           class="flex items-start gap-3"
         >
-          <Check class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+          <Check class="w-5 h-5 text-stone-500 flex-shrink-0 mt-0.5" />
           <span class="text-stone-600">{{ feature }}</span>
         </li>
       </ul>
