@@ -1,205 +1,281 @@
 <script setup lang="ts">
-import { ArrowDown, Video, Scissors } from "lucide-vue-next";
+import { ref } from "vue";
+import { useIntersectionObserver } from "@vueuse/core";
+
+const sectionRef = ref<HTMLElement | null>(null);
+const isConverged = ref(false);
+
+useIntersectionObserver(
+  sectionRef,
+  ([{ isIntersecting }]) => {
+    isConverged.value = isIntersecting;
+  },
+  { threshold: 0.4 }
+);
 </script>
 
 <template>
-  <section class="py-20 bg-stone-50">
-    <div class="container mx-auto px-4 text-center">
-      <h2 class="text-3xl md:text-4xl font-bold text-stone-800 mb-12">
+  <section ref="sectionRef" class="relative min-h-[120vh] bg-stone-50 overflow-hidden">
+    <div class="container mx-auto px-4 py-20">
+      <!-- Section Header -->
+      <h2
+        class="text-3xl md:text-4xl font-bold text-stone-800 mb-12 text-center"
+      >
         告別繁瑣工具
       </h2>
 
-      <!-- 被劃掉的工具列表 -->
-      <div class="space-y-8 mb-10 max-w-2xl mx-auto">
-        <!-- 文稿生成 AI -->
-        <div class="flex flex-col items-center gap-3">
-          <span
-            class="text-lg md:text-xl text-stone-400 line-through decoration-2 decoration-red-400"
-          >
-            丟掉文稿生成 AI
-          </span>
-          <div class="flex gap-4">
-            <!-- ChatGPT -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="ChatGPT"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                class="w-7 h-7"
-                fill="none"
-                stroke="#10a37f"
-                stroke-width="1.5"
+      <!-- Sticky Container -->
+      <div class="sticky top-24">
+        <!-- Cards Container -->
+        <div class="relative">
+          <!-- Three Cards Grid -->
+          <div class="cards-wrapper" :class="{ converged: isConverged }">
+            <!-- Left Card: 文稿生成 AI -->
+            <div class="card card-left">
+              <div
+                class="bg-white rounded-2xl p-6 shadow-lg border border-stone-100 h-full"
               >
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-                  fill="none"
-                />
-                <path
-                  d="M8 12h8M12 8v8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <circle cx="12" cy="12" r="3" fill="#10a37f" />
-              </svg>
-            </div>
-            <!-- Gemini -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="Gemini"
-            >
-              <svg viewBox="0 0 24 24" class="w-7 h-7">
-                <path
-                  d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"
-                  fill="url(#gemini-gradient)"
-                />
-                <defs>
-                  <linearGradient
-                    id="gemini-gradient"
-                    x1="2"
-                    y1="2"
-                    x2="22"
-                    y2="22"
+                <h3 class="text-lg font-bold text-stone-800 mb-2 text-center">
+                  文稿生成 AI
+                </h3>
+                <p
+                  class="text-sm text-stone-400 line-through decoration-red-400 text-center mb-4"
+                >
+                  丟掉這些工具
+                </p>
+                <div class="flex justify-center gap-4">
+                  <!-- ChatGPT -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="ChatGPT"
                   >
-                    <stop offset="0%" stop-color="#4285f4" />
-                    <stop offset="33%" stop-color="#ea4335" />
-                    <stop offset="66%" stop-color="#fbbc05" />
-                    <stop offset="100%" stop-color="#34a853" />
-                  </linearGradient>
-                </defs>
-              </svg>
+                    <svg viewBox="0 0 24 24" class="w-10 h-10" fill="#10a37f">
+                      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.8956zm16.0993 3.8558L12.6 8.3829l2.02-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
+                    </svg>
+                  </div>
+                  <!-- Gemini -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="Gemini"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-10 h-10">
+                      <defs>
+                        <linearGradient id="gemini-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#4285f4"/>
+                          <stop offset="50%" stop-color="#9b72cb"/>
+                          <stop offset="100%" stop-color="#d96570"/>
+                        </linearGradient>
+                      </defs>
+                      <path fill="url(#gemini-grad)" d="M12 0a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 3.6c2.3 0 4.4 1 5.9 2.5l-2.8 2.8c-.9-.9-2.2-1.4-3.5-1.4-2.8 0-4.9 2.3-4.9 5s2.2 5 4.9 5c2.4 0 4.2-1.4 4.6-3.4H12v-2.9h7.7c.1.6.2 1.3.2 1.9 0 5-3.4 8.6-8.2 8.6-4.8 0-8.7-3.9-8.7-8.7s3.9-8.4 8.7-8.4z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center Card: 影片製作工具 -->
+            <div class="card card-center">
+              <div
+                class="bg-white rounded-2xl p-6 shadow-lg border border-stone-100 h-full"
+              >
+                <h3 class="text-lg font-bold text-stone-800 mb-2 text-center">
+                  影片製作工具
+                </h3>
+                <p
+                  class="text-sm text-stone-400 line-through decoration-red-400 text-center mb-4"
+                >
+                  丟掉這些工具
+                </p>
+                <div class="flex justify-center gap-4">
+                  <!-- HeyGen -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="HeyGen"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-10 h-10">
+                      <rect x="2" y="2" width="20" height="20" rx="4" fill="#1a56db"/>
+                      <path fill="white" d="M7 7h2.5v4h5V7H17v10h-2.5v-4h-5v4H7V7z"/>
+                    </svg>
+                  </div>
+                  <!-- Runway -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="Runway"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-10 h-10">
+                      <rect x="2" y="2" width="20" height="20" rx="4" fill="#000000"/>
+                      <path fill="white" d="M7 7h5c2.2 0 4 1.8 4 4 0 1.5-.8 2.8-2 3.5l2.5 2.5h-3l-2-2H9.5v2H7V7zm2.5 5.5h2.5c.8 0 1.5-.7 1.5-1.5s-.7-1.5-1.5-1.5H9.5v3z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Card: 剪輯字幕軟體 -->
+            <div class="card card-right">
+              <div
+                class="bg-white rounded-2xl p-6 shadow-lg border border-stone-100 h-full"
+              >
+                <h3 class="text-lg font-bold text-stone-800 mb-2 text-center">
+                  剪輯字幕軟體
+                </h3>
+                <p
+                  class="text-sm text-stone-400 line-through decoration-red-400 text-center mb-4"
+                >
+                  丟掉這些工具
+                </p>
+                <div class="flex justify-center gap-4">
+                  <!-- CapCut -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="CapCut"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-10 h-10">
+                      <rect x="2" y="2" width="20" height="20" rx="4" fill="#000000"/>
+                      <path fill="none" stroke="url(#capcut-grad)" stroke-width="2" stroke-linecap="round" d="M8 7v10M8 12h5l3-5M16 12v5"/>
+                      <defs>
+                        <linearGradient id="capcut-grad" x1="8" y1="7" x2="16" y2="17">
+                          <stop offset="0%" stop-color="#00f2ea"/>
+                          <stop offset="100%" stop-color="#ff0050"/>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
+                  <!-- Premiere Pro -->
+                  <div
+                    class="w-14 h-14 rounded-xl bg-stone-50 shadow-sm flex items-center justify-center"
+                    title="Premiere Pro"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-10 h-10">
+                      <rect x="2" y="2" width="20" height="20" rx="2" fill="#9999ff"/>
+                      <path fill="#300050" d="M7 6v12h2.5v-4H12c2.2 0 4-1.8 4-4s-1.8-4-4-4H7zm2.5 2.5H12c.8 0 1.5.7 1.5 1.5s-.7 1.5-1.5 1.5H9.5V8.5z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 製作影片工具 -->
-        <div class="flex flex-col items-center gap-3">
-          <span
-            class="text-lg md:text-xl text-stone-400 line-through decoration-2 decoration-red-400"
+          <!-- DreaMake Overlay Card -->
+          <div
+            class="dreamake-overlay"
+            :class="{ visible: isConverged }"
           >
-            丟掉製作影片工具
-          </span>
-          <div class="flex gap-4">
-            <!-- 攝影機 -->
             <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="攝影機"
+              class="bg-white rounded-3xl px-12 py-10 shadow-2xl border border-purple-100"
             >
-              <Video class="w-6 h-6 text-stone-600" />
-            </div>
-            <!-- Heygen -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="Heygen"
-            >
-              <svg viewBox="0 0 24 24" class="w-7 h-7">
-                <rect
-                  x="3"
-                  y="3"
-                  width="18"
-                  height="18"
-                  rx="3"
-                  fill="#1a56db"
-                />
-                <text
-                  x="12"
-                  y="16"
-                  text-anchor="middle"
-                  fill="white"
-                  font-size="10"
-                  font-weight="bold"
-                  font-family="Arial"
+              <div class="text-center">
+                <div
+                  class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 rounded-2xl shadow-lg mb-6"
                 >
-                  H
-                </text>
-              </svg>
-            </div>
-            <!-- Runway -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="Runway"
-            >
-              <svg viewBox="0 0 24 24" class="w-7 h-7">
-                <rect
-                  x="3"
-                  y="3"
-                  width="18"
-                  height="18"
-                  rx="3"
-                  fill="#000000"
-                />
-                <text
-                  x="12"
-                  y="16"
-                  text-anchor="middle"
-                  fill="white"
-                  font-size="10"
-                  font-weight="bold"
-                  font-family="Arial"
-                >
-                  R
-                </text>
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <!-- 影片剪輯和上字幕軟體 -->
-        <div class="flex flex-col items-center gap-3">
-          <span
-            class="text-lg md:text-xl text-stone-400 line-through decoration-2 decoration-red-400"
-          >
-            丟掉影片剪輯和上字幕軟體
-          </span>
-          <div class="flex gap-4">
-            <!-- 剪映 CapCut -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="剪映"
-            >
-              <Scissors class="w-6 h-6 text-stone-800" />
-            </div>
-            <!-- Premiere Pro -->
-            <div
-              class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center opacity-60"
-              title="Premiere Pro"
-            >
-              <svg viewBox="0 0 24 24" class="w-7 h-7">
-                <rect
-                  x="3"
-                  y="3"
-                  width="18"
-                  height="18"
-                  rx="2"
-                  fill="#9999ff"
-                />
-                <text
-                  x="12"
-                  y="16"
-                  text-anchor="middle"
-                  fill="#1a0033"
-                  font-size="8"
-                  font-weight="bold"
-                  font-family="Arial"
-                >
-                  Pr
-                </text>
-              </svg>
+                  <svg
+                    viewBox="0 0 24 24"
+                    class="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                </div>
+                <div class="text-3xl md:text-4xl font-bold">
+                  <span class="gradient-text">DreaMake</span>
+                </div>
+                <p class="text-xl text-stone-600 mt-2">一條龍幫你完成</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 箭頭 -->
-      <div class="my-8">
-        <ArrowDown class="w-8 h-8 mx-auto text-purple-500 animate-bounce" />
-      </div>
-
-      <!-- 強調訊息 -->
-      <div class="text-2xl md:text-3xl font-bold">
-        <span class="gradient-text">DreaMake</span>
-        <span class="text-stone-800"> 一條龍幫你完成</span>
+      <!-- Mobile fallback -->
+      <div
+        class="md:hidden text-center mt-8 transition-all duration-500"
+        :class="isConverged ? 'opacity-100' : 'opacity-0'"
+      >
+        <div class="text-2xl font-bold">
+          <span class="gradient-text">DreaMake</span>
+          <span class="text-stone-800"> 一條龍幫你完成</span>
+        </div>
       </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.gradient-text {
+  background: linear-gradient(135deg, #ff6b9d 0%, #c86dd7 50%, #9747ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Cards Grid */
+.cards-wrapper {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .cards-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card base styles */
+.card {
+  transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: 0.8s;
+}
+
+/* Converged state - cards move toward center and down */
+.converged .card-left {
+  transform: translateX(80%) translateY(60px) scale(0.85);
+  opacity: 0.6;
+}
+
+.converged .card-center {
+  transform: translateY(60px) scale(0.85);
+  opacity: 0.6;
+}
+
+.converged .card-right {
+  transform: translateX(-80%) translateY(60px) scale(0.85);
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .converged .card-left,
+  .converged .card-center,
+  .converged .card-right {
+    transform: translateY(30px) scale(0.9);
+    opacity: 0.5;
+  }
+}
+
+/* DreaMake Overlay */
+.dreamake-overlay {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  z-index: 10;
+  opacity: 0;
+  transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: 1.2s;
+  pointer-events: none;
+}
+
+.dreamake-overlay.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+</style>

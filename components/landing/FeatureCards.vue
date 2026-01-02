@@ -13,30 +13,30 @@ const features: Feature[] = [
   {
     icon: Mic,
     title: '聲音克隆',
-    description: '打造完美複製個人聲音的 AI 分身，保留您獨特的說話風格。支援多種語言與情感表達。',
+    description: '上傳 30 秒錄音，AI 即可複製你的聲線、語調、說話節奏。生成結果達 95% 相似度，連家人都分不出來。',
     cta: '立即克隆您的聲音',
-    highlight: '140+ 種語言',
+    highlight: '30 秒完成',
   },
   {
     icon: Image,
     title: 'AI 虛擬人物',
-    description: '上傳照片即刻生成逼真 AI 頭像，讓您的分身開口說話，自然流暢。',
+    description: '一張照片，3 分鐘生成會眨眼、有表情的虛擬分身。支援真人照片或選擇 50+ 風格化角色。',
     cta: '立即創建虛擬人物',
-    highlight: '',
+    highlight: '3 分鐘生成',
   },
   {
     icon: FileText,
-    title: 'AI 腳本生成',
-    description: '輸入主題，AI 根據您的風格自動生成專業影片腳本，節省創作時間。',
+    title: 'AI 風格學習腳本',
+    description: '輸入主題，AI 用你的口吻寫稿。學習你的用詞習慣、句式結構、觀點邏輯，產出 100% 你風格的腳本。',
     cta: '立即生成腳本',
-    highlight: '智能創作',
+    highlight: '節省 80% 時間',
   },
   {
     icon: Clapperboard,
     title: '自動字幕',
-    description: '自動生成精確同步的多語言字幕，多種樣式可選，提升影片專業度。',
+    description: '98% 準確率的即時字幕生成，支援 140+ 語言互譯。20+ 字幕樣式，一鍵套用品牌風格。',
     cta: '立即添加字幕',
-    highlight: '精準同步',
+    highlight: '140+ 語言',
   },
 ]
 
@@ -51,10 +51,10 @@ const emit = defineEmits<{
       <!-- Section Header -->
       <div class="text-center mb-16">
         <h2 class="text-3xl md:text-4xl font-bold text-stone-800 mb-4">
-          強大的 AI 功能
+          一個分身，四大超能力
         </h2>
         <p class="text-lg text-stone-600 max-w-2xl mx-auto">
-          運用先進的 AI 技術，快速製作符合各種主題的專業影片內容
+          從聲音到思維，AI 完整複製你的創作 DNA
         </p>
       </div>
 

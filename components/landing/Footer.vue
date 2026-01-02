@@ -28,16 +28,16 @@ const companyLinks = [
   <footer class="py-16 bg-stone-900 text-stone-400">
     <div class="container mx-auto px-4">
       <!-- Main Footer Content -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+      <div class="mb-12">
         <!-- Brand -->
-        <div>
+        <div class="max-w-md">
           <div class="flex items-center gap-2 mb-4">
             <span class="text-2xl font-bold text-white">DreaMake</span>
           </div>
-          <p class="text-sm text-stone-500 mb-6">
+          <p class="text-sm text-stone-500">
             AI 驅動的影片生成平台，讓每個人都能輕鬆創作專業影片。
           </p>
-          <!-- Social Links -->
+          <!-- Social Links - 暫時隱藏，待有連結後恢復
           <div class="flex items-center gap-4">
             <a href="#" class="text-stone-500 hover:text-white transition-colors">
               <span class="text-xl">𝕏</span>
@@ -49,9 +49,10 @@ const companyLinks = [
               <Instagram class="w-5 h-5" />
             </a>
           </div>
+          -->
         </div>
 
-        <!-- Product Links -->
+        <!-- Product Links - 暫時隱藏，待頁面建立後恢復
         <div>
           <h3 class="text-white font-semibold mb-4">產品功能</h3>
           <ul class="space-y-3">
@@ -65,8 +66,9 @@ const companyLinks = [
             </li>
           </ul>
         </div>
+        -->
 
-        <!-- Resource Links -->
+        <!-- Resource Links - 暫時隱藏，待頁面建立後恢復
         <div>
           <h3 class="text-white font-semibold mb-4">資源</h3>
           <ul class="space-y-3">
@@ -80,8 +82,9 @@ const companyLinks = [
             </li>
           </ul>
         </div>
+        -->
 
-        <!-- Company Links -->
+        <!-- Company Links - 暫時隱藏，待頁面建立後恢復
         <div>
           <h3 class="text-white font-semibold mb-4">公司</h3>
           <ul class="space-y-3">
@@ -95,19 +98,22 @@ const companyLinks = [
             </li>
           </ul>
         </div>
+        -->
       </div>
 
       <!-- Bottom Bar -->
       <div class="pt-8 border-t border-stone-800">
-        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4">
           <p class="text-sm text-stone-500">
             © {{ currentYear }} DreaMake. All rights reserved.
           </p>
+          <!-- 底部連結 - 暫時隱藏，待頁面建立後恢復
           <div class="flex items-center gap-6 text-sm text-stone-500">
             <a href="#" class="hover:text-white transition-colors">隱私政策</a>
             <a href="#" class="hover:text-white transition-colors">服務條款</a>
             <a href="#" class="hover:text-white transition-colors">Cookie 設定</a>
           </div>
+          -->
         </div>
       </div>
     </div>

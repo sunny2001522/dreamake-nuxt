@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Gem, Shield, Clock, Sparkles } from 'lucide-vue-next'
+import { ChevronDown } from 'lucide-vue-next'
 import type { SubscriptionPlan } from '~/types/subscription'
 
 definePageMeta({
@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     question: '免費方案有什麼限制？',
-    answer: '免費方案有 30 Token 永久額度，可以體驗各項 AI 功能。輸出為 720p 畫質。用完後可升級為付費方案。',
+    answer: '免費方案有 100 Token 永久額度，可以體驗各項 AI 功能。輸出為 720p 畫質。用完後可升級為付費方案。',
   },
   {
     question: '如何升級或取消訂閱？',
@@ -106,38 +106,26 @@ async function handleSubscribe(code: string) {
 
     <!-- Features Section -->
     <section class="py-16 px-4 bg-white">
-      <div class="container mx-auto">
-        <h2 class="text-2xl font-bold text-stone-800 text-center mb-12">
+      <div class="container mx-auto max-w-4xl">
+        <h2 class="text-2xl font-bold text-stone-800 text-center mb-10">
           為什麼選擇 DreaMake？
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-5xl mx-auto">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div class="text-center">
-            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Sparkles class="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 class="font-semibold text-stone-800 mb-2">AI 驅動</h3>
-            <p class="text-sm text-stone-600">最先進的 AI 技術，生成專業品質影片</p>
+            <h3 class="font-semibold text-stone-800 mb-1">AI 驅動</h3>
+            <p class="text-sm text-stone-500">最先進的 AI 技術</p>
           </div>
           <div class="text-center">
-            <div class="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Gem class="w-6 h-6 text-pink-600" />
-            </div>
-            <h3 class="font-semibold text-stone-800 mb-2">快速生成</h3>
-            <p class="text-sm text-stone-600">幾分鐘內完成影片創作</p>
+            <h3 class="font-semibold text-stone-800 mb-1">快速生成</h3>
+            <p class="text-sm text-stone-500">幾分鐘內完成</p>
           </div>
           <div class="text-center">
-            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Shield class="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 class="font-semibold text-stone-800 mb-2">安全可靠</h3>
-            <p class="text-sm text-stone-600">資料加密，保護您的創作</p>
+            <h3 class="font-semibold text-stone-800 mb-1">安全可靠</h3>
+            <p class="text-sm text-stone-500">資料加密保護</p>
           </div>
           <div class="text-center">
-            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Clock class="w-6 h-6 text-green-600" />
-            </div>
-            <h3 class="font-semibold text-stone-800 mb-2">隨時取消</h3>
-            <p class="text-sm text-stone-600">無綁約，隨時可取消訂閱</p>
+            <h3 class="font-semibold text-stone-800 mb-1">隨時取消</h3>
+            <p class="text-sm text-stone-500">無綁約限制</p>
           </div>
         </div>
       </div>

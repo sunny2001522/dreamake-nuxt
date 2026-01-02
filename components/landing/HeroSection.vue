@@ -38,13 +38,13 @@ const videos = [exampleFemale, exampleAnime, exampleMale];
         <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold mb-6">
           <span class="gradient-text">DreaMake</span>
           <br />
-          <span class="text-stone-800">AI 影片生成平台</span>
+          <span class="text-stone-800">打造你的 AI 第二分身</span>
         </h1>
 
         <p class="text-lg md:text-xl text-stone-600 max-w-3xl mx-auto mb-8">
-          輕鬆製作高品質 AI 影片，10 倍速生成專業說話人影片。
+          AI 學習你的說話方式、用詞習慣、思維邏輯
           <br class="hidden md:block" />
-          適合 KOL、教育工作者、企業培訓、內容創作者。
+          讓分身代替你，持續產出 100% 你風格的影片內容
         </p>
 
         <!-- Features Tags -->
@@ -53,27 +53,27 @@ const videos = [exampleFemale, exampleAnime, exampleMale];
         >
           <span class="inline-flex items-center gap-1">
             <Mic class="w-4 h-4" />
-            語音克隆
+            聲音複製 95% 相似度
           </span>
           <span class="text-stone-300">·</span>
           <span class="inline-flex items-center gap-1">
             <Image class="w-4 h-4" />
-            AI 虛擬人物
+            3 分鐘生成虛擬分身
           </span>
           <span class="text-stone-300">·</span>
           <span class="inline-flex items-center gap-1">
             <FileText class="w-4 h-4" />
-            AI 腳本生成
+            學習你風格的 AI 編劇
           </span>
           <span class="text-stone-300">·</span>
           <span class="inline-flex items-center gap-1">
             <Clapperboard class="w-4 h-4" />
-            自動字幕
+            140+ 語言字幕
           </span>
         </div>
 
         <CommonButton size="lg" @click="emit('start')">
-          立即免費製作影片
+          免費創建我的 AI 分身
         </CommonButton>
       </div>
 

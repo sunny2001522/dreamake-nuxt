@@ -30,9 +30,6 @@ async function handleStartClick() {
     <!-- All-In-One Section -->
     <LandingAllInOneSection />
 
-    <!-- Demo Section -->
-    <LandingDemoSection />
-
     <!-- Use Cases Section -->
     <LandingUseCasesSection />
 

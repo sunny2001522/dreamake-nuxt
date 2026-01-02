@@ -2,6 +2,7 @@
 import type { SuggestedTopic, MediaPlatform, DbPersona } from "~/types";
 import { Mic, Sparkles, Gem } from "lucide-vue-next";
 import SoundWaveIndicator from "~/components/common/SoundWaveIndicator.vue";
+import PlatformLogos from "~/components/icons/PlatformLogos.vue";
 
 // Channel analysis Token cost
 const ANALYSIS_TOKEN_COST = 1;
@@ -63,56 +64,102 @@ const platformLabels: Record<MediaPlatform, string> = {
   twitch: "Twitch",
   bilibili: "Bilibili",
   tiktok: "TikTok",
-  podcast: "Podcast",
-  other: "其他",
+  podcast: "Podcast RSS",
+  other: "yt-dlp 支援平台",
 };
 
-// URL validation
+// Podcast RSS URL detection helper
+function isPodcastRssUrl(hostname: string, pathname: string): boolean {
+  const podcastHosts = [
+    'feeds.fireside.fm', 'feeds.soundon.fm', 'anchor.fm',
+    'open.firstory.me', 'libsyn.com', 'feeds.buzzsprout.com',
+    'feeds.simplecast.com', 'feed.podbean.com', 'feeds.transistor.fm',
+    'feeds.megaphone.fm', 'feeds.acast.com'
+  ];
+
+  if (podcastHosts.some(h => hostname.includes(h))) return true;
+  if (pathname.endsWith('/rss') || pathname.endsWith('/feed') || pathname.endsWith('.xml')) return true;
+  return false;
+}
+
+// URL validation - supports both URLs and text input
 const urlValidation = computed(() => {
-  if (!mediaUrl.value.trim()) {
+  const input = mediaUrl.value.trim();
+  if (!input) {
     return {
       isValid: false,
       platform: null as MediaPlatform | null,
       error: null,
+      isUrl: false,
     };
   }
 
+  // Check if it's a URL
   try {
-    const url = new URL(mediaUrl.value.trim());
+    const url = new URL(input);
     const hostname = url.hostname.toLowerCase();
+    const pathname = url.pathname.toLowerCase();
 
+    // YouTube
     if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
       return {
         isValid: true,
         platform: "youtube" as MediaPlatform,
         error: null,
+        isUrl: true,
       };
     }
+    // Twitch
     if (hostname.includes("twitch.tv")) {
       return {
         isValid: true,
         platform: "twitch" as MediaPlatform,
         error: null,
+        isUrl: true,
       };
     }
+    // Bilibili
     if (hostname.includes("bilibili.com")) {
       return {
         isValid: true,
         platform: "bilibili" as MediaPlatform,
         error: null,
+        isUrl: true,
       };
     }
+    // TikTok
     if (hostname.includes("tiktok.com")) {
       return {
         isValid: true,
         platform: "tiktok" as MediaPlatform,
         error: null,
+        isUrl: true,
       };
     }
-
-    return { isValid: false, platform: null, error: "不支援此平台" };
+    // Podcast RSS Feed detection
+    if (isPodcastRssUrl(hostname, pathname)) {
+      return {
+        isValid: true,
+        platform: "podcast" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // Other yt-dlp supported URLs
+    return {
+      isValid: true,
+      platform: "other" as MediaPlatform,
+      error: null,
+      isUrl: true,
+    };
   } catch {
-    return { isValid: false, platform: null, error: "請輸入有效的網址" };
+    // Not a URL - treat as text input (channel name or description)
+    return {
+      isValid: true,
+      platform: null as MediaPlatform | null,
+      error: null,
+      isUrl: false,
+    };
   }
 });
 
@@ -368,7 +415,7 @@ async function handleSelectPersona(persona: DbPersona) {
     }
 
     showPersonaModal.value = false;
-    toastStore.success("已套用主題方向");
+    toastStore.success("已套用創作風格");
   } catch (err) {
     console.error("Failed to select persona:", err);
     toastStore.error("套用失敗");
@@ -395,7 +442,7 @@ async function handleDeletePersona(personaId: string) {
       }
     }
 
-    toastStore.success("已刪除");
+    toastStore.success("已刪除風格");
   } catch (err) {
     console.error("Failed to delete persona:", err);
     toastStore.error("刪除失敗");
@@ -526,25 +573,13 @@ function handleTranscriptMicClick() {
             />
           </svg>
         </button>
-        <!-- Persona settings button -->
+        <!-- AI Suggestion button - prominent solid purple -->
         <button
-          class="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700"
+          class="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
           @click="showPersonaModal = true"
         >
-          <svg
-            class="w-3.5 h-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-            />
-          </svg>
-          {{ hasPersona ? "主題" : "套用AI建議" }}
+          <Sparkles class="w-4 h-4" />
+          設定創作風格
         </button>
         
       </div>
@@ -709,7 +744,7 @@ function handleTranscriptMicClick() {
           <div
             class="px-4 py-3 border-b border-stone-200 flex items-center justify-between"
           >
-            <h3 class="font-bold text-stone-800">頻道主題方向</h3>
+            <h3 class="font-bold text-stone-800">讓 AI 學習你的風格</h3>
             <button
               class="p-1.5 hover:bg-stone-100 rounded-lg transition-colors"
               @click="showPersonaModal = false"
@@ -750,7 +785,7 @@ function handleTranscriptMicClick() {
                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                已保存的方向 ({{ savedPersonas.length }})
+                已儲存的風格 ({{ savedPersonas.length }})
               </label>
               <div class="space-y-2 max-h-64 overflow-y-auto">
                 <div
@@ -900,67 +935,87 @@ function handleTranscriptMicClick() {
                     d="M12 4v16m8-8H4"
                   />
                 </svg>
-                新增方向
+                新增風格
               </label>
             </div>
 
             <div>
               <label class="block text-sm font-medium text-stone-700 mb-2"
-                >媒體網址</label
+                >貼上頻道連結</label
               >
               <input
                 v-model="mediaUrl"
-                type="url"
-                placeholder="輸入 YouTube 頻道或影片網址..."
-                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                :class="
-                  urlValidation.error && mediaUrl.trim()
-                    ? 'border-red-300 focus:border-red-500'
-                    : 'border-stone-300 focus:border-purple-500'
-                "
+                type="text"
+                placeholder="貼上 YouTube/TikTok 連結，AI 會學習你的風格"
+                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500"
                 @keyup.enter="handleAnalyzeMedia"
               />
               <p
-                v-if="urlValidation.error && mediaUrl.trim()"
-                class="mt-1 text-xs text-red-500"
-              >
-                {{ urlValidation.error }}
-              </p>
-              <p
-                v-else-if="urlValidation.platform"
+                v-if="urlValidation.platform"
                 class="mt-1 text-xs text-green-600"
               >
                 已識別平台：{{ platformLabels[urlValidation.platform] }}
               </p>
+              <p
+                v-else-if="mediaUrl.trim() && !urlValidation.isUrl"
+                class="mt-1 text-xs text-blue-600"
+              >
+                將作為文字描述進行分析
+              </p>
             </div>
 
-            <!-- Supported platforms -->
+            <!-- Supported platforms with logos -->
             <div>
               <p class="text-xs text-stone-500 mb-2">支援的平台：</p>
               <div class="flex flex-wrap gap-2">
-                <span
-                  class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded-full"
-                  >YouTube</span
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'youtube' ? 'opacity-100 bg-red-50' : 'opacity-40'"
                 >
-                <span
-                  class="px-2 py-1 text-xs bg-purple-50 text-purple-600 rounded-full"
-                  >Twitch</span
+                  <PlatformLogos platform="youtube" :size="16" />
+                  <span class="text-xs">YouTube</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'twitch' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
                 >
-                <span
-                  class="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-full"
-                  >Bilibili</span
+                  <PlatformLogos platform="twitch" :size="16" />
+                  <span class="text-xs">Twitch</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'bilibili' ? 'opacity-100 bg-blue-50' : 'opacity-40'"
                 >
-                <span
-                  class="px-2 py-1 text-xs bg-pink-50 text-pink-600 rounded-full"
-                  >TikTok</span
+                  <PlatformLogos platform="bilibili" :size="16" />
+                  <span class="text-xs">Bilibili</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'tiktok' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
                 >
+                  <PlatformLogos platform="tiktok" :size="16" />
+                  <span class="text-xs">TikTok</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'podcast' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="podcast" :size="16" />
+                  <span class="text-xs">Podcast</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'other' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="other" :size="16" />
+                  <span class="text-xs">yt-dlp</span>
+                </div>
               </div>
             </div>
 
             <div class="p-3 bg-stone-50 rounded-xl">
               <p class="text-xs text-stone-500">
-                AI
-                會分析頻道內容、影片風格、說話方式等特徵，並根據分析結果推薦適合的主題和生成相應風格的腳本。
+                AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本。
               </p>
             </div>
           </div>
@@ -977,7 +1032,7 @@ function handleTranscriptMicClick() {
             </button>
             <button
               class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-              :disabled="!urlValidation.isValid || isAnalyzing"
+              :disabled="!mediaUrl.trim() || isAnalyzing"
               @click="handleAnalyzeMedia"
             >
               <svg

@@ -4,7 +4,7 @@ import { consumeTokens, getTokenBalance, initializeUserSubscription } from '~/se
 
 const MAX_FILES = 20
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
-const CLONE_TOKEN_COST = 2
+const CLONE_TOKEN_COST = 10
 
 /**
  * POST /api/voice/clone
@@ -14,7 +14,7 @@ const CLONE_TOKEN_COST = 2
  * Returns the speakerId for later use with TTS.
  * Does NOT generate speech - use /api/voice/tts for that.
  *
- * Token cost: First clone is free, subsequent clones cost 2 Token each.
+ * Token cost: 10 Token per clone (charged after successful clone).
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -98,54 +98,22 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Check Token cost (first clone is free)
-    let tokenCost = 0
+    // Check Token balance (don't deduct yet)
     if (userId) {
-      const supabase = getSupabaseAdmin()
+      // Ensure user has Token balance
+      let balance = await getTokenBalance(userId)
+      if (!balance) {
+        const result = await initializeUserSubscription(userId)
+        balance = result.balance
+      }
 
-      // Count existing voices for this user
-      const { count } = await supabase
-        .from('voices')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
+      console.log('Voice clone - Token check:', { userId, required: CLONE_TOKEN_COST, balance: balance.balance })
 
-      const existingVoiceCount = count || 0
-      tokenCost = existingVoiceCount === 0 ? 0 : CLONE_TOKEN_COST
-
-      console.log('Voice clone - Token check:', { userId, existingVoiceCount, tokenCost })
-
-      // If not free, check and deduct Token
-      if (tokenCost > 0) {
-        // Ensure user has Token balance
-        let balance = await getTokenBalance(userId)
-        if (!balance) {
-          const result = await initializeUserSubscription(userId)
-          balance = result.balance
-        }
-
-        if (balance.balance < tokenCost) {
-          throw createError({
-            statusCode: 402,
-            message: `Token 餘額不足，需要 ${tokenCost} Token，目前餘額 ${balance.balance}`,
-          })
-        }
-
-        // Deduct Token
-        const consumeResult = await consumeTokens({
-          userId,
-          operationType: 'voice_clone',
-          description: `語音克隆: ${voiceName}`,
-          metadata: { voiceName },
+      if (balance.balance < CLONE_TOKEN_COST) {
+        throw createError({
+          statusCode: 402,
+          message: `Token 餘額不足，需要 ${CLONE_TOKEN_COST} Token，目前餘額 ${balance.balance}`,
         })
-
-        if (!consumeResult.success) {
-          throw createError({
-            statusCode: 402,
-            message: consumeResult.error || 'Token 扣除失敗',
-          })
-        }
-
-        console.log('Voice clone - Token consumed:', consumeResult)
       }
     }
 
@@ -153,6 +121,23 @@ export default defineEventHandler(async (event) => {
     const { speakerId } = await cloneVoice(audioFiles, voiceName)
 
     console.log('Voice cloned successfully, speaker ID:', speakerId)
+
+    // Deduct Token after successful clone
+    if (userId) {
+      const consumeResult = await consumeTokens({
+        userId,
+        operationType: 'voice_clone',
+        description: `語音克隆: ${voiceName}`,
+        metadata: { voiceName },
+      })
+
+      if (!consumeResult.success) {
+        console.error('Voice clone - Token deduction failed:', consumeResult.error)
+        // Clone succeeded but billing failed - log but don't fail the request
+      } else {
+        console.log('Voice clone - Token consumed:', consumeResult)
+      }
+    }
 
     return {
       success: true,
