@@ -173,7 +173,7 @@ export async function initializeUserSubscription(userId: string): Promise<{
     .eq('code', 'free')
     .single()
 
-  const tokensMonthly = freePlan?.tokens_monthly || 30
+  const tokensMonthly = freePlan?.tokens_monthly || 100
 
   // 建立用戶訂閱
   const { data: subscription, error: subError } = await supabase
@@ -268,7 +268,7 @@ async function renewUserPeriod(userId: string): Promise<TokenBalance> {
     }
   }
 
-  const tokensMonthly = plan?.tokensMonthly || 30
+  const tokensMonthly = plan?.tokensMonthly || 100
 
   const now = new Date()
   const periodEnd = new Date(now)

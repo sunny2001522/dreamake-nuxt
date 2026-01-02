@@ -221,3 +221,40 @@ export async function ensureCompatibleFormat(file: File): Promise<File> {
     throw new Error('無法轉換音檔格式。請嘗試上傳 MP3 或 WAV 格式的音檔。')
   }
 }
+
+/**
+ * Get the duration of an audio or video file in seconds
+ * Uses HTMLMediaElement for accurate duration detection
+ *
+ * @param file - Audio or video file
+ * @returns Duration in seconds
+ */
+export async function getMediaDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const media = file.type.startsWith('video/')
+      ? document.createElement('video')
+      : document.createElement('audio')
+
+    media.preload = 'metadata'
+
+    const timeout = setTimeout(() => {
+      URL.revokeObjectURL(url)
+      reject(new Error('讀取檔案超時'))
+    }, 10000)
+
+    media.onloadedmetadata = () => {
+      clearTimeout(timeout)
+      URL.revokeObjectURL(url)
+      resolve(media.duration)
+    }
+
+    media.onerror = () => {
+      clearTimeout(timeout)
+      URL.revokeObjectURL(url)
+      reject(new Error('無法讀取檔案'))
+    }
+
+    media.src = url
+  })
+}

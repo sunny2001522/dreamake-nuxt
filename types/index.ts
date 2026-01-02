@@ -54,8 +54,10 @@ export interface TimedSegment {
 export interface PendingAudioFile {
   id: string
   file: File
+  processedFile?: File          // 處理後的 WAV 檔
   name: string
   duration: number
+  originalDuration?: number     // 裁剪前的原始長度
   status: 'processing' | 'ready' | 'error'
   error?: string
   wasTrimmed: boolean
