@@ -526,25 +526,13 @@ function handleTranscriptMicClick() {
             />
           </svg>
         </button>
-        <!-- Persona settings button -->
+        <!-- AI Suggestion button - prominent solid purple -->
         <button
-          class="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700"
+          class="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
           @click="showPersonaModal = true"
         >
-          <svg
-            class="w-3.5 h-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-            />
-          </svg>
-          {{ hasPersona ? "主題" : "套用AI建議" }}
+          <Sparkles class="w-4 h-4" />
+          AI 建議
         </button>
         
       </div>

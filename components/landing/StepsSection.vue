@@ -4,23 +4,23 @@ import exampleVideo from "~/assets/video/example-female.mp4";
 const steps = [
   {
     number: "01",
-    title: "分析個人風格",
-    description: "AI 分析您的風格與內容特色，打造專屬短影音策略。",
+    title: "AI 學習你的風格",
+    description: "上傳過往影片或文章，AI 深度分析你的說話方式、用詞偏好、思維邏輯。",
   },
   {
     number: "02",
-    title: "選擇你的照片和聲音",
-    description: "上傳照片或選擇虛擬人物，搭配克隆語音或精選配音。",
+    title: "設定分身外觀與聲音",
+    description: "上傳真人照片或選擇虛擬角色，錄製 30 秒語音完成聲音克隆。",
   },
   {
     number: "03",
-    title: "一鍵生成短影音逐字稿",
-    description: "AI 自動生成符合您風格的爆款腳本內容。",
+    title: "AI 用你的風格寫稿",
+    description: "輸入主題，AI 模仿你的口吻產出腳本。像你本人寫的，但只花 10 秒。",
   },
   {
     number: "04",
-    title: "生成爆紅短影音 有字幕",
-    description: "一鍵生成完整影片，自動添加精美字幕。",
+    title: "一鍵生成完整影片",
+    description: "分身開口說話，自動配上字幕。3 分鐘產出一支專業影片。",
   },
 ];
 </script>
@@ -31,10 +31,10 @@ const steps = [
       <!-- Section Header -->
       <div class="text-center mb-16">
         <h2 class="text-3xl md:text-4xl font-bold text-stone-800 mb-4">
-          四步驟輕鬆製作 AI 影片
+          10 分鐘，創造你的 AI 分身
         </h2>
         <p class="text-lg text-stone-600 max-w-2xl mx-auto">
-          簡單直覺的操作流程，讓每個人都能快速上手
+          從風格分析到影片產出，全程 AI 自動完成
         </p>
       </div>
 

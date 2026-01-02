@@ -15,12 +15,12 @@ const emit = defineEmits<{
       </div>
 
       <h2 class="text-3xl md:text-5xl font-bold text-stone-800 mb-6">
-        準備好開始創作了嗎？
+        你的 AI 分身，正在等你
       </h2>
       <p class="text-stone-600 text-lg md:text-xl mb-10 max-w-2xl mx-auto">
-        立即免費試用 DreaMake，體驗 AI 影片生成的魔力。
+        每天有 500+ 創作者用 DreaMake 分身持續產出內容。
         <br class="hidden md:block" />
-        無需信用卡，免費開始您的創作之旅。
+        你的分身，什麼時候上線？
       </p>
 
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -28,7 +28,7 @@ const emit = defineEmits<{
           class="px-10 py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-300"
           @click="emit('start')"
         >
-          立即免費製作影片
+          免費創建我的 AI 分身
         </button>
       </div>
 
