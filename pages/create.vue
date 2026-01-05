@@ -211,33 +211,20 @@ async function handleGenerateVoice() {
     return;
   }
 
-  // Token 檢查
-  const userId = authStore.authInfo.sub;
-  const estimatedMinutes = Math.ceil(draft.value.transcript.length / 200); // 約 200 字/分鐘
-  const tokenCheck = await subscriptionStore.checkTokens(userId, 'voice_tts', estimatedMinutes);
-
-  if (!tokenCheck.sufficient) {
-    requiredTokens.value = tokenCheck.cost;
-    showUpgradeModal.value = true;
-    return;
-  }
+  const userId = authStore.authInfo.email || authStore.authInfo.sub;
 
   try {
     generationStore.resetGeneration();
     generationStore.setStage("voice");
     generationStore.setError(null);
 
+    // Generate voice TTS with userId for token deduction (API handles token check and deduction)
     const speakerId = draft.value.voicePreview!.speakerId!;
     const result = await videoGeneration.generateVoice(
       speakerId,
-      draft.value.transcript
+      draft.value.transcript,
+      userId
     );
-
-    // 消耗 Token
-    await subscriptionStore.consumeTokens(userId, 'voice_tts', {
-      durationMinutes: estimatedMinutes,
-      description: `語音合成: ${draft.value.transcript.substring(0, 20)}...`,
-    });
 
     // Generate subtitles from audio
     if (draft.value.subtitleEnabled) {
@@ -261,6 +248,14 @@ async function handleGenerateVoice() {
     generationStore.setResult(record);
     generationStore.setStage("complete");
     toastStore.success("語音生成完成！");
+
+    // 顯示 token 扣除通知並刷新餘額
+    if (result.tokenConsumed > 0) {
+      toastStore.info(`已扣除 ${result.tokenConsumed} Token`);
+      if (userId) {
+        subscriptionStore.loadSubscription(userId);
+      }
+    }
   } catch (err: any) {
     console.error("Voice generation failed:", err);
     generationStore.setError(err.message || "語音生成失敗");

@@ -8,6 +8,7 @@ interface GenerateVideoParams {
   videoModel?: VideoModel
   waveSpeedPrompt?: string
   waveSpeedResolution?: WaveSpeedResolution
+  userId?: string
 }
 
 interface PollResult {
@@ -37,12 +38,17 @@ export function useVideoGeneration() {
     }
   }
 
-  async function generateVoice(speakerId: string, transcript: string): Promise<{ audioUrl: string }> {
+  async function generateVoice(speakerId: string, transcript: string, userId?: string): Promise<{ audioUrl: string; tokenConsumed: number; balanceAfter: number }> {
     const response = await $fetch('/api/voice/tts', {
       method: 'POST',
-      body: { speakerId, transcript },
+      body: { speakerId, transcript, userId },
     })
-    return { audioUrl: (response as any).audioUrl }
+    const res = response as any
+    return {
+      audioUrl: res.audioUrl,
+      tokenConsumed: res.tokenConsumed || 0,
+      balanceAfter: res.balanceAfter || 0,
+    }
   }
 
   async function startGeneration(params: GenerateVideoParams) {
@@ -62,6 +68,7 @@ export function useVideoGeneration() {
           videoModel: params.videoModel || 'vidnoz',
           waveSpeedPrompt: params.waveSpeedPrompt,
           waveSpeedResolution: params.waveSpeedResolution,
+          userId: params.userId,
         },
       })
 
@@ -72,6 +79,8 @@ export function useVideoGeneration() {
         taskId: result.taskId,
         pollEndpoint: result.pollEndpoint as 'vidnoz' | 'wavespeed',
         audioUrl: result.audioUrl,
+        tokenConsumed: result.tokenConsumed || 0,
+        balanceAfter: result.balanceAfter || 0,
       }
     } catch (err: any) {
       error.value = err.message || 'Failed to start generation'

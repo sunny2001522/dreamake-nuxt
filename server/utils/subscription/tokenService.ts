@@ -163,8 +163,9 @@ export async function initializeUserSubscription(userId: string): Promise<{
   const supabase = getSupabaseAdmin()
 
   const now = new Date()
-  // 免費方案永久有效，設定為很遠的未來日期
-  const periodEnd = new Date('2099-12-31T23:59:59Z')
+  // 免費方案有效期為一個月
+  const periodEnd = new Date(now)
+  periodEnd.setMonth(periodEnd.getMonth() + 1)
 
   // 獲取免費方案的 Token 配額
   const { data: freePlan } = await supabase
@@ -237,7 +238,7 @@ export async function initializeUserSubscription(userId: string): Promise<{
 }
 
 /**
- * 重置用戶週期並發放新 Token
+ * 重置用戶週期 - 付費方案到期時清除所有 Token
  */
 async function renewUserPeriod(userId: string): Promise<TokenBalance> {
   const supabase = getSupabaseAdmin()
@@ -268,21 +269,34 @@ async function renewUserPeriod(userId: string): Promise<TokenBalance> {
     }
   }
 
-  const tokensMonthly = plan?.tokensMonthly || 100
-
   const now = new Date()
-  const periodEnd = new Date(now)
-  periodEnd.setDate(periodEnd.getDate() + 30)
 
-  // 更新餘額
+  // 付費方案：週期結束，清除所有 Token 為 0
+  // 先取得當前餘額，記錄清除交易
+  const { data: currentBalanceData } = await supabase
+    .from('token_balances')
+    .select('balance')
+    .eq('user_id', userId)
+    .single()
+
+  if (currentBalanceData && currentBalanceData.balance > 0) {
+    // 記錄過期清除交易
+    await supabase.from('token_transactions').insert({
+      user_id: userId,
+      type: 'expire',
+      amount: -currentBalanceData.balance,
+      balance_after: 0,
+      description: `方案到期，清除 ${currentBalanceData.balance} Token`,
+    })
+  }
+
+  // 更新餘額為 0（不自動發放，等待用戶重新購買）
   const { data, error } = await supabase
     .from('token_balances')
     .update({
-      balance: tokensMonthly,
+      balance: 0,
       tokens_used_this_period: 0,
-      tokens_granted_this_period: tokensMonthly,
-      period_start: now.toISOString(),
-      period_end: periodEnd.toISOString(),
+      tokens_granted_this_period: 0,
       updated_at: now.toISOString(),
     })
     .eq('user_id', userId)
@@ -293,21 +307,11 @@ async function renewUserPeriod(userId: string): Promise<TokenBalance> {
     throw new Error(`Failed to renew period: ${error.message}`)
   }
 
-  // 記錄發放交易
-  await supabase.from('token_transactions').insert({
-    user_id: userId,
-    type: 'grant',
-    amount: tokensMonthly,
-    balance_after: tokensMonthly,
-    description: `週期重置，發放 ${tokensMonthly} Token`,
-  })
-
-  // 更新訂閱週期
+  // 更新訂閱狀態為已過期
   await supabase
     .from('user_subscriptions')
     .update({
-      current_period_start: now.toISOString(),
-      current_period_end: periodEnd.toISOString(),
+      status: 'expired',
       updated_at: now.toISOString(),
     })
     .eq('user_id', userId)
@@ -367,6 +371,7 @@ export async function checkSufficientBalance(
 
 /**
  * 消耗 Token
+ * @param customCost - 可選的自定義成本，如果提供則不從資料庫查詢
  */
 export async function consumeTokens(params: {
   userId: string
@@ -375,16 +380,17 @@ export async function consumeTokens(params: {
   durationMinutes?: number
   description?: string
   metadata?: Record<string, unknown>
+  customCost?: number
 }): Promise<{
   success: boolean
   consumed: number
   balanceAfter: number
   error?: string
 }> {
-  const { userId, operationType, operationId, durationMinutes, description, metadata } = params
+  const { userId, operationType, operationId, durationMinutes, description, metadata, customCost } = params
   const supabase = getSupabaseAdmin()
 
-  const cost = await calculateTokenCost(operationType, durationMinutes)
+  const cost = customCost ?? await calculateTokenCost(operationType, durationMinutes)
 
   // 獲取當前餘額
   let balance = await getTokenBalance(userId)

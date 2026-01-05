@@ -14,7 +14,7 @@ watch(
   () => authStore.user,
   async (user) => {
     if (user && authStore.authInfo.sub) {
-      await subscriptionStore.loadSubscription(authStore.authInfo.sub)
+      await subscriptionStore.loadSubscription(authStore.authInfo.email || authStore.authInfo.sub)
     } else {
       subscriptionStore.reset()
     }
@@ -49,6 +49,7 @@ async function handleLogin() {
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
         <NuxtLink :to="authStore.user ? '/create' : '/'" class="flex items-center gap-2">
+          <img src="/logo.svg" alt="DreaMake" class="h-8 w-8" />
           <span class="text-xl font-bold gradient-text">DreaMake</span>
         </NuxtLink>
 

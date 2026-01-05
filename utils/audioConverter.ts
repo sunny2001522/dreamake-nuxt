@@ -1,8 +1,9 @@
 /**
  * Audio format converter utilities
  * Converts browser-recorded WebM audio to WAV format for API compatibility
- * TopMediai supports: WAV, MP3, AAC, FLAC, AIFF, Opus, OGG, OGA, M4A
- * TopMediai does NOT support: WebM
+ *
+ * Inworld AI supports: WAV, MP3, Linear PCM
+ * (Previously: TopMediai supports: WAV, MP3, AAC, FLAC, AIFF, Opus, OGG, OGA, M4A)
  */
 
 /**
@@ -163,7 +164,7 @@ function writeString(view: DataView, offset: number, str: string): void {
 }
 
 /**
- * Convert audio file to a format supported by TopMediai API
+ * Convert audio file to a format supported by TTS API (Inworld)
  * Converts all formats to compressed WAV for consistent file size
  *
  * @param file - Input audio file

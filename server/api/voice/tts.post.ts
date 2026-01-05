@@ -1,4 +1,6 @@
-import { textToSpeech } from '~/server/utils/topmediai'
+import { textToSpeech } from '~/server/utils/inworld'
+import { getTokenBalance, consumeTokens, initializeUserSubscription } from '~/server/utils/subscription/tokenService'
+import { estimateDurationFromTranscript, calculateTtsTokenCost } from '~/types/subscription'
 
 /**
  * POST /api/voice/tts
@@ -9,7 +11,7 @@ import { textToSpeech } from '~/server/utils/topmediai'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody(event)
-    const { speakerId, transcript } = body
+    const { speakerId, transcript, userId } = body
 
     if (!speakerId) {
       throw createError({
@@ -25,6 +27,54 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 計算 Token 成本
+    const durationSeconds = estimateDurationFromTranscript(transcript)
+    const estimatedCost = calculateTtsTokenCost(durationSeconds)
+
+    // 如果有 userId，檢查餘額並扣除 Token
+    let tokenConsumed = 0
+    let balanceAfter = 0
+
+    if (userId) {
+      // 檢查餘額
+      let balance = await getTokenBalance(userId)
+      if (!balance) {
+        const init = await initializeUserSubscription(userId)
+        balance = init.balance
+      }
+
+      if (balance.balance < estimatedCost) {
+        throw createError({
+          statusCode: 402,
+          message: `Token 餘額不足，需要 ${estimatedCost} Token，目前餘額 ${balance.balance}`,
+        })
+      }
+
+      // 執行 TTS
+      const { audioUrl } = await textToSpeech(transcript, speakerId)
+
+      // TTS 成功後扣除 Token
+      const consumeResult = await consumeTokens({
+        userId,
+        operationType: 'tts',
+        customCost: estimatedCost,
+        description: `語音生成 (${Math.ceil(durationSeconds)}秒)`,
+      })
+
+      tokenConsumed = estimatedCost
+      balanceAfter = consumeResult.balanceAfter
+
+      return {
+        success: true,
+        speakerId,
+        audioUrl,
+        transcript: transcript.substring(0, 500),
+        tokenConsumed,
+        balanceAfter,
+      }
+    }
+
+    // 沒有 userId 的情況（向下相容）
     const { audioUrl } = await textToSpeech(transcript, speakerId)
 
     return {

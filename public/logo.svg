@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B9D"/>
+      <stop offset="50%" stop-color="#C86DD7"/>
+      <stop offset="100%" stop-color="#9747FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Star -->
+  <path
+    d="M32 4 L34.5 12 L43 12 L36.5 17 L39 25 L32 20.5 L25 25 L27.5 17 L21 12 L29.5 12 Z"
+    fill="url(#gradient)"
+  />
+
+  <!-- Camera Body -->
+  <rect
+    x="10" y="32"
+    width="34" height="24"
+    rx="4"
+    stroke="url(#gradient)"
+    stroke-width="3"
+    fill="none"
+  />
+
+  <!-- Lens Circle -->
+  <circle
+    cx="27" cy="44"
+    r="8"
+    stroke="url(#gradient)"
+    stroke-width="3"
+    fill="none"
+  />
+
+  <!-- Viewfinder Triangle -->
+  <polygon
+    points="44,38 54,44 44,50"
+    fill="url(#gradient)"
+  />
+</svg>

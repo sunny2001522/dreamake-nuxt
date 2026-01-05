@@ -1,3 +1,15 @@
+/*
+ * ==========================================================================
+ * TOPMEDIAI INTEGRATION - COMMENTED OUT FOR INWORLD MIGRATION
+ * Keep for potential future reuse
+ * ==========================================================================
+ *
+ * To re-enable TopMediai:
+ * 1. Uncomment this file
+ * 2. Update imports in server/api/voice/clone.post.ts and tts.post.ts
+ * 3. Change config check from inworldApiKey to topMediaiApiKey
+ *
+
 import { fixPronunciation } from './pronunciationFix'
 
 const TOPMEDIAI_BASE_URL = 'https://api.topmediai.com/v1'
@@ -15,9 +27,7 @@ interface TextToSpeechResponse {
   oss_url?: string
 }
 
-/**
- * Generate speech from text using TopMediai TTS
- */
+// Generate speech from text using TopMediai TTS
 export async function textToSpeech(
   transcript: string,
   speakerId: string
@@ -101,9 +111,7 @@ export async function textToSpeech(
   return { audioUrl }
 }
 
-/**
- * Clone a voice from audio files
- */
+// Clone a voice from audio files
 export async function cloneVoice(
   audioFiles: { data: ArrayBuffer; filename: string; type: string }[],
   voiceName: string
@@ -159,9 +167,7 @@ export async function cloneVoice(
   return { speakerId }
 }
 
-/**
- * Get list of cloned voices
- */
+// Get list of cloned voices
 export async function getClonedVoices(name?: string): Promise<any> {
   const config = useRuntimeConfig()
   const apiKey = config.topMediaiApiKey
@@ -188,4 +194,20 @@ export async function getClonedVoices(name?: string): Promise<any> {
   }
 
   return await response.json()
+}
+
+*/
+
+// Placeholder exports to prevent import errors during transition
+// These will throw errors if called, indicating the need to use Inworld
+export function textToSpeech(): never {
+  throw new Error('TopMediai is disabled. Use Inworld API instead (server/utils/inworld.ts)')
+}
+
+export function cloneVoice(): never {
+  throw new Error('TopMediai is disabled. Use Inworld API instead (server/utils/inworld.ts)')
+}
+
+export function getClonedVoices(): never {
+  throw new Error('TopMediai is disabled. Use Inworld API instead (server/utils/inworld.ts)')
 }

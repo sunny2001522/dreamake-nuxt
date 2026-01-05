@@ -1,5 +1,5 @@
 import { fixPronunciation } from '~/server/utils/pronunciationFix'
-import { textToSpeech, cloneVoice } from '~/server/utils/topmediai'
+import { textToSpeech, cloneVoice } from '~/server/utils/inworld'
 
 /**
  * POST /api/voice
@@ -10,10 +10,17 @@ import { textToSpeech, cloneVoice } from '~/server/utils/topmediai'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
-  if (!config.topMediaiApiKey) {
+  if (!config.inworldApiKey) {
     throw createError({
       statusCode: 500,
-      message: 'TopMediai API key not configured',
+      message: 'Inworld API key not configured',
+    })
+  }
+
+  if (!config.inworldWorkspaceId) {
+    throw createError({
+      statusCode: 500,
+      message: 'Inworld Workspace ID not configured',
     })
   }
 
@@ -97,10 +104,10 @@ export default defineEventHandler(async (event) => {
     console.error('Voice API Error:', error)
 
     // Check for specific error types
-    if (error.message?.includes('permission') || error.message?.includes('subscription')) {
+    if (error.message?.includes('permission') || error.message?.includes('subscription') || error.message?.includes('unauthorized')) {
       throw createError({
         statusCode: 403,
-        message: 'TopMediai API 帳戶沒有語音克隆權限，請至 https://www.topmediai.com/api/voice-cloning-api/ 購買訂閱',
+        message: 'Inworld API 帳戶沒有語音克隆權限，請檢查 API key 設定',
       })
     }
 

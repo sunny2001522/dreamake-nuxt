@@ -182,7 +182,8 @@ async function handleAnalyzeMedia() {
   try {
     isAnalyzing.value = true
 
-    const result = await mediaAnalysis.startAnalysis([
+    // 啟動分析任務（背景輪詢）
+    await mediaAnalysis.startAnalysis([
       {
         url: mediaUrl.value.trim(),
         platform: urlValidation.value.platform!,
@@ -191,46 +192,17 @@ async function handleAnalyzeMedia() {
       },
     ])
 
-    if (result) {
-      analysisResult.value = result
-      emit('personaUpdate', result)
-      toastStore.success('分析完成！')
-      showPersonaModal.value = false
-
-      // Save persona to Supabase
-      if (authStore.user) {
-        try {
-          const { savePersona } = usePersonaStorage()
-          const userId = authStore.authInfo.email || authStore.authInfo.sub
-          const platform = urlValidation.value.platform!
-
-          const savedPersona = await savePersona({
-            user_id: userId,
-            name: `${platformLabels[platform]} 分析`,
-            content: result,
-            source: 'media',
-            source_urls: [mediaUrl.value.trim()],
-            platforms: [platform],
-            job_id: null,
-          }, userId)
-
-          // Update user preference
-          await preferencesStore.setPersonaPreference(userId, savedPersona.id)
-          currentPersonaId.value = savedPersona.id
-
-          // Reload personas list
-          await loadSavedPersonas()
-        } catch (saveErr) {
-          console.error('Failed to save persona:', saveErr)
-        }
-      }
-
-      mediaUrl.value = ''
-    }
-  } catch (err: any) {
+    // 分析已在背景進行，顯示提示並關閉 Modal
+    toastStore.success('分析已啟動！', 5000)
+    toastStore.info('分析會在背景進行，完成後會自動通知您', 5000)
+    showPersonaModal.value = false
+    mediaUrl.value = ''
+  }
+  catch (err: any) {
     console.error('Media analysis failed:', err)
-    toastStore.error('分析失敗', err.message || '請稍後再試')
-  } finally {
+    toastStore.error('啟動分析失敗', err.message || '請稍後再試')
+  }
+  finally {
     isAnalyzing.value = false
   }
 }

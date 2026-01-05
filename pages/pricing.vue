@@ -10,6 +10,7 @@ const { $manager } = useNuxtApp()
 const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const toastStore = useToastStore()
+const { redirectToCheckout } = useFanbarPayment()
 
 const { planCode } = storeToRefs(subscriptionStore)
 
@@ -62,14 +63,15 @@ async function handleSubscribe(code: string) {
     return
   }
 
-  // 創作者方案 - 顯示即將推出
+  // 創作者方案 - 導向 Fanbar 結帳
   isLoading.value = true
-
-  // TODO: 整合 Fanbar 金流
-  setTimeout(() => {
+  try {
+    redirectToCheckout('/pricing')
+  } catch (error) {
+    console.error('Failed to redirect to checkout:', error)
+    toastStore.error('無法開啟付款頁面，請稍後再試')
     isLoading.value = false
-    toastStore.info('付款功能即將推出，敬請期待！')
-  }, 1000)
+  }
 }
 </script>
 

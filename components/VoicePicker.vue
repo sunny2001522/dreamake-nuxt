@@ -545,13 +545,13 @@ async function cloneBatchVoice() {
     clearPendingFiles();
 
     toastStore.success("語音克隆完成！");
+    toastStore.info(`已扣除 ${CLONE_TOKEN_COST} Token`);
     showModal.value = false;
 
-    // Refresh Token balance if consumed
-    if (cloneTokenCost.value > 0) {
-      const subscriptionStore = useSubscriptionStore();
-      const userId = authStore.authInfo.email || authStore.authInfo.sub;
-      if (userId) subscriptionStore.loadSubscription(userId);
+    // Refresh Token balance
+    const subscriptionStore = useSubscriptionStore();
+    if (userId) {
+      subscriptionStore.loadSubscription(userId);
     }
   } catch (err: any) {
     console.error("Voice cloning failed:", err);
