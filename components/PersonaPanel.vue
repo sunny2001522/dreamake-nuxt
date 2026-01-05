@@ -2,31 +2,46 @@
 import type { MediaPlatform } from '~/types'
 import { Gem } from 'lucide-vue-next'
 
-// Channel analysis Token cost
+// Channel analysis Token cost (shown in UI, actual deduction happens on completion)
 const ANALYSIS_TOKEN_COST = 1
 
 const toastStore = useToastStore()
 const mediaAnalysis = useMediaAnalysis()
+const pendingStore = usePendingAnalysesStore()
 
 // Modal state
 const showModal = ref(false)
 const mediaUrl = ref('')
-const isAnalyzing = ref(false)
+const isStartingAnalysis = ref(false) // 只用於「開始分析」按鈕的載入狀態
 const analysisResult = ref<string | null>(null)
 const analysisPlatform = ref<MediaPlatform | null>(null)
 
-// 假進度條狀態
-const fakeProgress = ref(0)
-const fakeProgressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-
-// 動態時間估算
-const analysisStartTime = ref<number | null>(null)
-const estimatedRemainingMinutes = ref<number | null>(null)
+// 追蹤當前的分析任務
+const currentJobId = ref<string | null>(null)
 
 // Emits for topic suggestions
 const emit = defineEmits<{
   personaUpdate: [content: string]
 }>()
+
+// 監聽 store 中的完成事件
+watch(
+  () => pendingStore.analyses,
+  (analyses) => {
+    // 檢查是否有我們追蹤的任務完成了
+    if (currentJobId.value) {
+      const myAnalysis = analyses.find(a => a.jobId === currentJobId.value)
+      if (myAnalysis?.status === 'completed' && myAnalysis.result) {
+        // 任務完成，更新 UI
+        analysisResult.value = myAnalysis.result
+        analysisPlatform.value = myAnalysis.platforms[0] || null
+        emit('personaUpdate', myAnalysis.result)
+        currentJobId.value = null
+      }
+    }
+  },
+  { deep: true }
+)
 
 // Validate URL and detect platform
 const urlValidation = computed(() => {
@@ -52,7 +67,8 @@ const urlValidation = computed(() => {
     }
 
     return { isValid: false, platform: null, error: '不支援此平台' }
-  } catch {
+  }
+  catch {
     return { isValid: false, platform: null, error: '請輸入有效的網址' }
   }
 })
@@ -66,30 +82,8 @@ const platformLabels: Record<MediaPlatform, string> = {
   other: '其他',
 }
 
-// 時間格式化函數
-function formatRemainingTime(minutes: number | null): string {
-  if (!minutes) return '30 分鐘'
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
-    if (mins === 0) return `${hours} 小時`
-    return `${hours} 小時 ${mins} 分鐘`
-  }
-  return `${minutes} 分鐘`
-}
-
-// 取消分析功能
-function handleCancelAnalysis() {
-  mediaAnalysis.cancel()
-  isAnalyzing.value = false
-  if (fakeProgressTimer.value) {
-    clearTimeout(fakeProgressTimer.value)
-  }
-  fakeProgress.value = 0
-  analysisStartTime.value = null
-  estimatedRemainingMinutes.value = null
-  toastStore.info('已取消分析')
-}
+// 是否有正在進行的分析（來自 store）
+const hasOngoingAnalysis = computed(() => pendingStore.pendingCount > 0)
 
 function openModal() {
   showModal.value = true
@@ -107,35 +101,10 @@ async function handleAnalyze() {
   }
 
   try {
-    isAnalyzing.value = true
+    isStartingAnalysis.value = true
     analysisPlatform.value = urlValidation.value.platform
-    fakeProgress.value = 0
-    analysisStartTime.value = Date.now()
-    estimatedRemainingMinutes.value = 30 // 初始預估 30 分鐘
 
-    // 啟動假進度條動畫 + 動態時間估算 (參照原專案)
-    const runFakeProgress = () => {
-      if (fakeProgress.value >= 90) return
-      const increment = Math.random() * 2.5 + 0.5
-      const slowdownFactor = 1 - fakeProgress.value / 100
-      fakeProgress.value = Math.min(90, fakeProgress.value + increment * slowdownFactor)
-
-      // 動態計算剩餘時間
-      if (analysisStartTime.value && fakeProgress.value > 5) {
-        const elapsedMs = Date.now() - analysisStartTime.value
-        const elapsedMinutes = elapsedMs / 60000
-        // 基於假進度估算總時間 (進度最多到90%，所以用90計算)
-        const estimatedTotalMinutes = (elapsedMinutes / fakeProgress.value) * 90
-        const remaining = Math.max(1, Math.ceil(estimatedTotalMinutes - elapsedMinutes))
-        estimatedRemainingMinutes.value = remaining
-      }
-
-      const nextInterval = Math.random() * 6000 + 2000
-      fakeProgressTimer.value = setTimeout(runFakeProgress, nextInterval)
-    }
-    fakeProgressTimer.value = setTimeout(runFakeProgress, 1000)
-
-    // Step 1: 啟動分析任務
+    // 啟動分析任務（存入數據庫，由背景輪詢處理）
     const { jobId } = await mediaAnalysis.startAnalysis([
       {
         url: mediaUrl.value.trim(),
@@ -145,39 +114,27 @@ async function handleAnalyze() {
       },
     ])
 
-    // Step 2: 輪詢等待結果 (這是關鍵的缺失部分！)
-    const analysisContent = await mediaAnalysis.pollUntilComplete(jobId, {
-      maxAttempts: 180, // 30分鐘超時
-      intervalMs: 10000, // 10秒輪詢間隔
-      onProgress: (progress) => {
-        console.log('[Media Analysis] Progress:', progress)
-      },
-    })
+    // 記錄當前任務 ID
+    currentJobId.value = jobId
 
-    // Step 3: 完成
-    fakeProgress.value = 100
-    if (fakeProgressTimer.value) {
-      clearTimeout(fakeProgressTimer.value)
-    }
-
-    analysisResult.value = analysisContent
-    emit('personaUpdate', analysisContent)
-    toastStore.success('分析完成！')
+    // 分析已啟動，顯示提示並關閉 Modal
+    toastStore.success('分析已啟動！', 5000)
+    toastStore.info('分析會在背景進行，完成後會自動通知您', 5000)
     closeModal()
-  } catch (err: any) {
+  }
+  catch (err: any) {
     console.error('Media analysis failed:', err)
-    toastStore.error('分析失敗', err.message || '請稍後再試')
-  } finally {
-    isAnalyzing.value = false
-    if (fakeProgressTimer.value) {
-      clearTimeout(fakeProgressTimer.value)
-    }
+    toastStore.error('啟動分析失敗', err.message || '請稍後再試')
+  }
+  finally {
+    isStartingAnalysis.value = false
   }
 }
 
 function handleClearPersona() {
   analysisResult.value = null
   analysisPlatform.value = null
+  currentJobId.value = null
   emit('personaUpdate', '')
 }
 </script>
@@ -266,80 +223,55 @@ function handleClearPersona() {
 
           <!-- Content -->
           <div class="p-4 space-y-4">
-            <!-- 輸入區域 (非分析中顯示) -->
-            <template v-if="!isAnalyzing">
-              <div>
-                <label class="block text-sm font-medium text-stone-700 mb-2">媒體網址</label>
-                <input
-                  v-model="mediaUrl"
-                  type="url"
-                  placeholder="輸入 YouTube 頻道或影片網址..."
-                  class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                  :class="urlValidation.error && mediaUrl.trim()
-                    ? 'border-red-300 focus:border-red-500'
-                    : 'border-stone-300 focus:border-purple-500'"
-                  @keyup.enter="handleAnalyze"
-                />
-                <p v-if="urlValidation.error && mediaUrl.trim()" class="mt-1 text-xs text-red-500">
-                  {{ urlValidation.error }}
-                </p>
-                <p v-else-if="urlValidation.platform" class="mt-1 text-xs text-green-600">
-                  已識別平台：{{ platformLabels[urlValidation.platform] }}
-                </p>
-              </div>
-
-              <!-- Supported platforms -->
-              <div>
-                <p class="text-xs text-stone-500 mb-2">支援的平台：</p>
-                <div class="flex flex-wrap gap-2">
-                  <span class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded-full">YouTube</span>
-                  <span class="px-2 py-1 text-xs bg-purple-50 text-purple-600 rounded-full">Twitch</span>
-                  <span class="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-full">Bilibili</span>
-                  <span class="px-2 py-1 text-xs bg-pink-50 text-pink-600 rounded-full">TikTok</span>
-                </div>
-              </div>
-            </template>
-
-            <div v-if="!isAnalyzing" class="p-3 bg-stone-50 rounded-xl">
-              <p class="text-xs text-stone-500">
-                AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本。
+            <!-- 輸入區域 -->
+            <div>
+              <label class="block text-sm font-medium text-stone-700 mb-2">媒體網址</label>
+              <input
+                v-model="mediaUrl"
+                type="url"
+                placeholder="輸入 YouTube 頻道或影片網址..."
+                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                :class="urlValidation.error && mediaUrl.trim()
+                  ? 'border-red-300 focus:border-red-500'
+                  : 'border-stone-300 focus:border-purple-500'"
+                :disabled="isStartingAnalysis"
+                @keyup.enter="handleAnalyze"
+              />
+              <p v-if="urlValidation.error && mediaUrl.trim()" class="mt-1 text-xs text-red-500">
+                {{ urlValidation.error }}
+              </p>
+              <p v-else-if="urlValidation.platform" class="mt-1 text-xs text-green-600">
+                已識別平台：{{ platformLabels[urlValidation.platform] }}
               </p>
             </div>
 
-            <!-- 分析進度區塊 (分析中顯示) -->
-            <div v-if="isAnalyzing" class="p-4 bg-purple-50 rounded-xl border border-purple-200 space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <svg class="animate-spin w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span class="text-sm font-medium text-purple-700">正在分析頻道內容...</span>
+            <!-- Supported platforms -->
+            <div>
+              <p class="text-xs text-stone-500 mb-2">支援的平台：</p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded-full">YouTube</span>
+                <span class="px-2 py-1 text-xs bg-purple-50 text-purple-600 rounded-full">Twitch</span>
+                <span class="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-full">Bilibili</span>
+                <span class="px-2 py-1 text-xs bg-pink-50 text-pink-600 rounded-full">TikTok</span>
+              </div>
+            </div>
+
+            <div class="p-3 bg-stone-50 rounded-xl">
+              <p class="text-xs text-stone-500">
+                AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本。
+                分析會在背景進行，完成後會自動通知您並扣除 {{ ANALYSIS_TOKEN_COST }} 點數。
+              </p>
+            </div>
+
+            <!-- 進行中的分析提示 -->
+            <div v-if="hasOngoingAnalysis" class="p-3 bg-purple-50 rounded-xl border border-purple-200">
+              <div class="flex items-center gap-2">
+                <div class="relative">
+                  <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
                 </div>
-                <button
-                  class="text-sm text-red-500 hover:text-red-600 font-medium"
-                  @click="handleCancelAnalysis"
-                >
-                  取消
-                </button>
-              </div>
-
-              <!-- 進度條 -->
-              <div class="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
-                <div
-                  class="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all duration-1000 ease-out"
-                  :style="{ width: `${fakeProgress}%` }"
-                />
-              </div>
-
-              <!-- 動態預估時間 -->
-              <div class="space-y-1">
-                <p class="text-xs text-stone-600">
-                  預計還需要約 <span class="font-medium">{{ formatRemainingTime(estimatedRemainingMinutes) }}</span>
-                </p>
-                <p class="text-xs text-stone-500">
-                  您可以先關閉此視窗繼續其他操作，分析完成後會自動通知您
-                </p>
+                <span class="text-sm text-purple-700">
+                  目前有 {{ pendingStore.pendingCount }} 個分析正在進行中
+                </span>
               </div>
             </div>
           </div>
@@ -354,18 +286,18 @@ function handleClearPersona() {
             </button>
             <button
               class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-              :disabled="!urlValidation.isValid || isAnalyzing"
+              :disabled="!urlValidation.isValid || isStartingAnalysis"
               @click="handleAnalyze"
             >
-              <svg v-if="isAnalyzing" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <svg v-if="isStartingAnalysis" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
-              {{ isAnalyzing ? '分析中...' : '開始分析' }}
-              <span v-if="!isAnalyzing" class="flex items-center gap-0.5 text-white/80">
+              {{ isStartingAnalysis ? '啟動中...' : '開始分析' }}
+              <span v-if="!isStartingAnalysis" class="flex items-center gap-0.5 text-white/80">
                 <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
               </span>
             </button>

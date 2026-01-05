@@ -9,5 +9,6 @@
       <slot />
     </main>
     <CommonToast />
+    <PendingAnalysesBadge />
   </div>
 </template>

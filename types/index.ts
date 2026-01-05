@@ -316,3 +316,57 @@ export interface SubtitleResponse {
   source: 'whisper' | 'gemini' | 'gemini-text' | 'fallback'
   duration?: number
 }
+
+// ============================================
+// Pending Analysis Types (Background Polling)
+// ============================================
+
+export type PendingAnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface DbPendingAnalysis {
+  id: string
+  user_id: string
+  job_id: string
+  source_urls: string[]
+  platforms: string[]
+  status: PendingAnalysisStatus
+  result: string | null
+  persona_id: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  last_polled_at: string | null
+  poll_count: number
+}
+
+export type DbPendingAnalysisInsert = Omit<DbPendingAnalysis, 'id' | 'created_at' | 'updated_at' | 'last_polled_at' | 'poll_count' | 'result' | 'persona_id' | 'error_message'>
+
+export interface PendingAnalysis {
+  id: string
+  jobId: string
+  sourceUrls: string[]
+  platforms: MediaPlatform[]
+  status: PendingAnalysisStatus
+  result?: string
+  personaId?: string
+  errorMessage?: string
+  createdAt: Date
+  updatedAt: Date
+  lastPolledAt?: Date
+  pollCount: number
+}
+
+export interface PollPendingResponse {
+  analyses: PendingAnalysis[]
+  completed: Array<{
+    id: string
+    jobId: string
+    result: string
+    personaId: string
+  }>
+  failed: Array<{
+    id: string
+    jobId: string
+    errorMessage: string
+  }>
+}
