@@ -33,7 +33,7 @@ async function loadTransactions() {
       "/api/tokens/transactions",
       {
         query: {
-          userId: authStore.authInfo.sub,
+          userId: authStore.authInfo.email || authStore.authInfo.sub,
           limit: 10,
         },
       }
@@ -72,8 +72,8 @@ function getTransactionTypeLabel(type: string): string {
 }
 
 function getTransactionTypeClass(type: string): string {
-  if (type === "consume") return "text-red-600";
-  return "text-green-600";
+  if (type === "consume") return "text-stone-600";
+  return "text-purple-600";
 }
 </script>
 

@@ -4,7 +4,12 @@ import { generateWaveSpeedVideo, DEFAULT_WAVESPEED_PROMPT } from '~/server/utils
 import { cropImageToAspectRatio } from '~/server/utils/image/serverImageProcessor'
 import { STORAGE_BUCKET } from '~/server/utils/supabase'
 import { getSupabaseAdmin } from '~/server/utils/supabase-admin'
+import { getTokenBalance, consumeTokens, initializeUserSubscription } from '~/server/utils/subscription/tokenService'
+import { VIDEO_TOKEN_COSTS, estimateDurationFromTranscript } from '~/types/subscription'
 import type { VideoModel, WaveSpeedResolution } from '~/types'
+
+// Base Token cost for video generation
+const VIDEO_BASE_TOKEN = 2
 
 /**
  * Upload cropped image buffer to Supabase Storage for WaveSpeed (requires URL)
@@ -55,6 +60,7 @@ export default defineEventHandler(async (event) => {
       videoModel = 'vidnoz' as VideoModel,
       waveSpeedPrompt = DEFAULT_WAVESPEED_PROMPT,
       waveSpeedResolution = '720p' as WaveSpeedResolution,
+      userId,
     } = body
 
     if (!transcript) {
@@ -74,6 +80,36 @@ export default defineEventHandler(async (event) => {
         statusCode: 400,
         message: 'Avatar URL is required',
       })
+    }
+
+    // Calculate estimated Token cost
+    const durationSeconds = estimateDurationFromTranscript(transcript)
+    const model = videoModel as 'wavespeed' | 'vidnoz'
+    const perSecondCost = VIDEO_TOKEN_COSTS[model].perSecond
+    const estimatedCost = VIDEO_BASE_TOKEN + Math.round(perSecondCost * durationSeconds)
+
+    // Check Token balance before generation
+    if (userId) {
+      let balance = await getTokenBalance(userId)
+      if (!balance) {
+        const result = await initializeUserSubscription(userId)
+        balance = result.balance
+      }
+
+      console.log('Video generation - Token check:', {
+        userId,
+        required: estimatedCost,
+        balance: balance.balance,
+        model: videoModel,
+        durationSeconds,
+      })
+
+      if (balance.balance < estimatedCost) {
+        throw createError({
+          statusCode: 402,
+          message: `Token 餘額不足，需要約 ${estimatedCost} Token，目前餘額 ${balance.balance}`,
+        })
+      }
     }
 
     console.log('Starting video generation process...')
@@ -130,6 +166,27 @@ export default defineEventHandler(async (event) => {
       pollEndpoint = 'vidnoz'
     }
 
+    // Consume Token after successful generation start
+    let tokenConsumed = 0
+    let balanceAfter = 0
+    if (userId) {
+      const consumeResult = await consumeTokens({
+        userId,
+        operationType: 'video_generation',
+        description: `影片生成 (${videoModel === 'wavespeed' ? '高品質' : '一般品質'})`,
+        metadata: { videoModel, durationSeconds, taskId },
+        customCost: estimatedCost,
+      })
+
+      if (consumeResult.success) {
+        tokenConsumed = consumeResult.consumed
+        balanceAfter = consumeResult.balanceAfter
+        console.log('Video generation - Token consumed:', consumeResult)
+      } else {
+        console.error('Video generation - Token deduction failed:', consumeResult.error)
+      }
+    }
+
     // Return taskId immediately - frontend will poll for status
     return {
       id: Date.now().toString(),
@@ -141,6 +198,8 @@ export default defineEventHandler(async (event) => {
       audioUrl: ttsAudioUrl,
       createdAt: new Date().toISOString(),
       status: 'generating', // Frontend should poll for completion
+      tokenConsumed,
+      balanceAfter,
     }
   } catch (error: any) {
     console.error('Generation API Error:', error)

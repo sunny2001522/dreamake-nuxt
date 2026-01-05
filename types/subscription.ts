@@ -77,6 +77,23 @@ export const VIDEO_TOKEN_COSTS = {
 
 export type VideoModel = keyof typeof VIDEO_TOKEN_COSTS
 
+// 語音 TTS Token 成本
+// 計算依據：影片(vidnoz) 14.342成本/分鐘 → 0.5 token/秒，語音 0.15成本/分鐘 → 0.00523 token/秒
+export const TTS_TOKEN_COST = {
+  perSecond: 0.00523,  // 0.15/14.342 * 0.5
+  minCost: 1,          // 最低扣除 1 token
+} as const
+
+/**
+ * 計算語音 TTS 的 Token 消耗
+ * @param durationSeconds 語音時長（秒）
+ * @returns Token 消耗量（最低 1 token）
+ */
+export function calculateTtsTokenCost(durationSeconds: number): number {
+  const calculated = Math.round(TTS_TOKEN_COST.perSecond * durationSeconds)
+  return Math.max(calculated, TTS_TOKEN_COST.minCost)
+}
+
 // API 請求/回應類型
 export interface TokenBalanceResponse {
   balance: number

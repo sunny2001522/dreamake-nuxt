@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Gem, TrendingUp, Calendar, ArrowUpRight } from 'lucide-vue-next'
+import { Gem, ArrowUpRight } from 'lucide-vue-next'
 import type { SubscriptionPlan, UserSubscription } from '~/types/subscription'
 
 interface Props {
@@ -21,25 +21,14 @@ const percentage = computed(() => {
   return Math.round((props.used / props.total) * 100)
 })
 
-const remaining = computed(() => props.total - props.used)
-
-const statusColor = computed(() => {
-  const remainingPercent = (remaining.value / props.total) * 100
-  if (remainingPercent <= 10) return 'critical'
-  if (remainingPercent <= 30) return 'warning'
-  return 'normal'
-})
-
-const progressBarClass = computed(() => {
-  switch (statusColor.value) {
-    case 'critical':
-      return 'bg-red-500'
-    case 'warning':
-      return 'bg-amber-500'
-    default:
-      return 'bg-purple-500'
-  }
-})
+// 格式化日期為 年/月/日
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  return `${year}/${month}/${day}`
+}
 </script>
 
 <template>
@@ -70,57 +59,22 @@ const progressBarClass = computed(() => {
         <span class="text-4xl font-bold text-stone-800">{{ balance.toLocaleString() }}</span>
         <span class="text-stone-500">/ {{ total.toLocaleString() }} Token</span>
       </div>
-      <p class="text-sm text-stone-500 mt-1">可用餘額</p>
+      <p class="text-sm text-stone-500 mt-1">
+        目前方案：{{ formatDate(subscription.currentPeriodStart) }} - {{ formatDate(subscription.currentPeriodEnd) }}
+      </p>
     </div>
 
     <!-- 進度條 -->
     <div class="mb-6">
-      <div class="flex justify-between text-sm mb-2">
-        <span class="text-stone-600">已使用 {{ used.toLocaleString() }} Token</span>
+      <div class="flex justify-end text-sm mb-2">
         <span class="text-stone-500">{{ percentage }}%</span>
       </div>
       <div class="h-3 bg-stone-100 rounded-full overflow-hidden">
         <div
-          :class="['h-full rounded-full transition-all duration-500', progressBarClass]"
+          class="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-purple-500 to-pink-500"
           :style="{ width: `${percentage}%` }"
         />
       </div>
-    </div>
-
-    <!-- 統計資訊 -->
-    <div class="grid grid-cols-2 gap-4 pb-6 border-b border-stone-100">
-      <div class="flex items-center gap-3">
-        <TrendingUp class="w-4 h-4 text-stone-400" />
-        <div>
-          <p class="text-sm text-stone-500">剩餘</p>
-          <p class="font-medium text-stone-800">{{ remaining.toLocaleString() }} Token</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <Calendar class="w-4 h-4 text-stone-400" />
-        <div>
-          <p class="text-sm text-stone-500">重置日期</p>
-          <p class="font-medium text-stone-800">{{ daysRemaining }} 天後</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 低餘額警告 -->
-    <div
-      v-if="statusColor === 'critical'"
-      class="mt-6 p-3 bg-red-50 rounded-xl"
-    >
-      <p class="text-sm text-red-700">
-        Token 餘額即將用盡，請考慮升級方案以獲取更多 Token
-      </p>
-    </div>
-    <div
-      v-else-if="statusColor === 'warning'"
-      class="mt-6 p-3 bg-amber-50 rounded-xl"
-    >
-      <p class="text-sm text-amber-700">
-        Token 餘額較低，建議適量使用或升級方案
-      </p>
     </div>
 
     <!-- 操作按鈕 -->
