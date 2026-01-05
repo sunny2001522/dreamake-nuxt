@@ -1,4 +1,4 @@
-import { textToSpeech } from '~/server/utils/topmediai'
+import { textToSpeech } from '~/server/utils/inworld'
 
 /**
  * POST /api/voice/tts

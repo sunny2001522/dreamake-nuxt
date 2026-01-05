@@ -1,4 +1,4 @@
-import { cloneVoice } from '~/server/utils/topmediai'
+import { cloneVoice } from '~/server/utils/inworld'
 import { getSupabaseAdmin } from '~/server/utils/supabase-admin'
 import { consumeTokens, getTokenBalance, initializeUserSubscription } from '~/server/utils/subscription/tokenService'
 
@@ -19,10 +19,17 @@ const CLONE_TOKEN_COST = 10
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
-  if (!config.topMediaiApiKey) {
+  if (!config.inworldApiKey) {
     throw createError({
       statusCode: 500,
-      message: 'TopMediai API key not configured',
+      message: 'Inworld API key not configured',
+    })
+  }
+
+  if (!config.inworldWorkspaceId) {
+    throw createError({
+      statusCode: 500,
+      message: 'Inworld Workspace ID not configured',
     })
   }
 
@@ -147,10 +154,18 @@ export default defineEventHandler(async (event) => {
     console.error('Voice Clone API Error:', error)
 
     // Check for permission issues
-    if (error.message?.includes('permission') || error.message?.includes('subscription')) {
+    if (error.message?.includes('permission') || error.message?.includes('subscription') || error.message?.includes('unauthorized')) {
       throw createError({
         statusCode: 403,
-        message: 'TopMediai API 帳戶沒有語音克隆權限，請至 https://www.topmediai.com/api/voice-cloning-api/ 購買訂閱',
+        message: 'Inworld API 帳戶沒有語音克隆權限，請檢查 API key 設定',
+      })
+    }
+
+    // Check for workspace issues
+    if (error.message?.includes('workspace') || error.message?.includes('Workspace')) {
+      throw createError({
+        statusCode: 400,
+        message: 'Inworld Workspace ID 設定錯誤，請確認環境變數 INWORLD_WORKSPACE_ID',
       })
     }
 

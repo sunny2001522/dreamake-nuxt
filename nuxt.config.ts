@@ -43,6 +43,9 @@ export default defineNuxtConfig({
     // Server-side only
     adminEmails: process.env.ADMIN_EMAILS || '',
     topMediaiApiKey: process.env.TOPMEDIAI_API_KEY || '',
+    // Inworld AI TTS
+    inworldApiKey: process.env.INWORLD_API_KEY || '',
+    inworldWorkspaceId: process.env.INWORLD_WORKSPACE_ID || '',
     vidnozApiKey: process.env.VIDNOZ_API_KEY || '',
     wavespeedApiKey: process.env.WAVESPEED_API_KEY || '',
     geminiApiKey: process.env.GEMINI_API_KEY || '',
@@ -51,6 +54,8 @@ export default defineNuxtConfig({
     renderFfmpegUrl: process.env.RENDER_FFMPEG_URL || '',
     youtubeAnalysisApiUrl: process.env.YOUTUBE_ANALYSIS_API_URL || 'https://development-agentgenerator.cmoney.tw',
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    // Fanbar API
+    fanbarApiUrl: process.env.FANBAR_API_URL || 'https://fanbar.cmoney.internal/FanBar',
 
     // Client-side (public)
     // Note: These are automatically overridden at runtime with NUXT_PUBLIC_* environment variables
@@ -64,6 +69,8 @@ export default defineNuxtConfig({
       oidcDomain: '',
       identityServiceDomain: '',
       profileServiceDomain: '',
+      // Fanbar 結帳 URL
+      fanbarCheckoutUrl: process.env.NUXT_PUBLIC_FANBAR_CHECKOUT_URL || 'https://www.cmoney.tw/cashflow/checkout',
     },
   },
 
@@ -76,6 +83,7 @@ export default defineNuxtConfig({
     '/admin': { ssr: false },  // Admin dashboard needs client-side only
     '/account': { ssr: false }, // Account page needs client-side only
     '/pricing': { ssr: false }, // Pricing page with dynamic plans
+    '/payment/callback': { ssr: false }, // Payment callback page
   },
 
   nitro: {

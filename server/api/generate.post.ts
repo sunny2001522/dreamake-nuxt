@@ -1,4 +1,4 @@
-import { textToSpeech } from '~/server/utils/topmediai'
+import { textToSpeech } from '~/server/utils/inworld'
 import { generateTalkingVideoWithBuffer } from '~/server/utils/vidnoz'
 import { generateWaveSpeedVideo, DEFAULT_WAVESPEED_PROMPT } from '~/server/utils/wavespeed'
 import { cropImageToAspectRatio } from '~/server/utils/image/serverImageProcessor'
@@ -84,10 +84,10 @@ export default defineEventHandler(async (event) => {
       videoModel,
     })
 
-    // 1. Generate audio from TOPMEDIAI TTS
-    console.log('Calling TOPMEDIAI TTS...')
-    const { audioUrl: topMediaiAudioUrl } = await textToSpeech(transcript, speakerId)
-    console.log('TOPMEDIAI TTS audio generated:', topMediaiAudioUrl)
+    // 1. Generate audio from Inworld TTS
+    console.log('Calling Inworld TTS...')
+    const { audioUrl: ttsAudioUrl } = await textToSpeech(transcript, speakerId)
+    console.log('Inworld TTS audio generated:', ttsAudioUrl)
 
     // 2. Crop avatar image to target aspect ratio
     console.log('Cropping avatar image to aspect ratio:', aspectRatio)
@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
 
       // Call WaveSpeed API
       const { requestId } = await generateWaveSpeedVideo({
-        audioUrl: topMediaiAudioUrl,
+        audioUrl: ttsAudioUrl,
         imageUrl: croppedImageUrl,
         prompt: waveSpeedPrompt,
         resolution: waveSpeedResolution,
@@ -123,7 +123,7 @@ export default defineEventHandler(async (event) => {
     } else {
       // Vidnoz flow: uses buffer directly
       console.log('Using Vidnoz for video generation...')
-      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, topMediaiAudioUrl)
+      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, ttsAudioUrl)
       console.log('Vidnoz task started, taskId:', vidnozTaskId)
 
       taskId = vidnozTaskId
@@ -138,7 +138,7 @@ export default defineEventHandler(async (event) => {
       pollEndpoint,
       transcript,
       aspectRatio,
-      audioUrl: topMediaiAudioUrl,
+      audioUrl: ttsAudioUrl,
       createdAt: new Date().toISOString(),
       status: 'generating', // Frontend should poll for completion
     }
