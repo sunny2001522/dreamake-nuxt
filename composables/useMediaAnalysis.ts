@@ -20,7 +20,7 @@ export function useMediaAnalysis() {
   const progress = ref<AnalysisProgress | null>(null)
   const result = ref<string | null>(null)
 
-  const user = useSupabaseUser()
+  const authStore = useAuthStore()
   const pendingStore = usePendingAnalysesStore()
 
   /**
@@ -28,9 +28,12 @@ export function useMediaAnalysis() {
    * 輪詢由全局 store 處理
    */
   async function startAnalysis(items: MediaItem[]): Promise<{ jobId: string; pendingId: string }> {
-    if (!user.value?.id) {
+    if (!authStore.user) {
       throw new Error('User not authenticated')
     }
+
+    // 使用 OIDC 用戶 ID
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
 
     try {
       isAnalyzing.value = true
@@ -50,7 +53,7 @@ export function useMediaAnalysis() {
       const { data: pendingData, error: insertError } = await supabase
         .from('pending_analyses')
         .insert({
-          user_id: user.value.id,
+          user_id: userId,
           job_id: jobId,
           source_urls: items.map(i => i.url),
           platforms: items.map(i => i.platform),
