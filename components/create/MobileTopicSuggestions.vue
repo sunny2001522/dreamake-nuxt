@@ -486,9 +486,7 @@ function parseAnalysisTitle(analysis: string): string | null {
               <p v-if="urlValidation.error && mediaUrl.trim()" class="mt-1 text-xs text-red-500">
                 {{ urlValidation.error }}
               </p>
-              <p v-else-if="urlValidation.platform" class="mt-1 text-xs text-green-600">
-                已識別平台：{{ platformLabels[urlValidation.platform] }}
-              </p>
+              
             </div>
 
             <div class="flex flex-wrap gap-2">

@@ -136,6 +136,7 @@ export default defineEventHandler(async (event) => {
         operationType: 'voice_clone',
         description: `語音克隆: ${voiceName}`,
         metadata: { voiceName },
+        customCost: CLONE_TOKEN_COST,
       })
 
       if (!consumeResult.success) {
