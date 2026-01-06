@@ -1,4 +1,5 @@
 import { textToSpeech } from '~/server/utils/inworld'
+import { fixPronunciation } from '~/server/utils/pronunciationFix'
 import { getTokenBalance, consumeTokens, initializeUserSubscription } from '~/server/utils/subscription/tokenService'
 import { estimateDurationFromTranscript, calculateTtsTokenCost } from '~/types/subscription'
 
@@ -50,8 +51,9 @@ export default defineEventHandler(async (event) => {
         })
       }
 
-      // 執行 TTS
-      const { audioUrl } = await textToSpeech(transcript, speakerId)
+      // 執行 TTS（應用發音校正）
+      const ttsText = fixPronunciation(transcript)
+      const { audioUrl } = await textToSpeech(ttsText, speakerId)
 
       // TTS 成功後扣除 Token
       const consumeResult = await consumeTokens({
@@ -75,7 +77,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // 沒有 userId 的情況（向下相容）
-    const { audioUrl } = await textToSpeech(transcript, speakerId)
+    const ttsTextNoUser = fixPronunciation(transcript)
+    const { audioUrl } = await textToSpeech(ttsTextNoUser, speakerId)
 
     return {
       success: true,

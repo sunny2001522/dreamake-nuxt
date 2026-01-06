@@ -6,6 +6,12 @@
  */
 
 export const pronunciationMap: Record<string, string> = {
+  // ===== 品牌/專有名詞 =====
+  'CMoney': '西媽膩',
+  'cmoney': '西媽膩',
+  'Cmoney': '西媽膩',
+  'CMONEY': '西媽膩',
+
   // ===== 語氣詞聲調校正 =====
   '捏': '餒',
   '啦': '拉',
