@@ -20,7 +20,7 @@ export default defineNuxtConfig({
   },
 
   devServer: {
-    port: 3003,
+    port: 3000,
     https: hasLocalCerts
       ? {
           key: fs.readFileSync(path.join(certsPath, 'localhost-key.pem'), 'utf-8'),
