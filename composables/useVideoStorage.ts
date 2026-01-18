@@ -25,6 +25,24 @@ export const useVideoStorage = () => {
   }
 
   /**
+   * Upload burned video blob to Supabase Storage
+   * Used for uploading videos with burned-in subtitles
+   * Uses server-side API with admin client to bypass RLS for CMoney OIDC users
+   */
+  const uploadBlobToStorage = async (blob: Blob, userId: string): Promise<string> => {
+    const formData = new FormData()
+    formData.append('file', blob, `burned-${Date.now()}.mp4`)
+    formData.append('userId', userId)
+
+    const result = await $fetch('/api/video/upload-blob', {
+      method: 'POST',
+      body: formData,
+    })
+
+    return result.publicUrl
+  }
+
+  /**
    * Get all videos for a user, sorted by created_at (most recent first)
    */
   const getAllVideos = async (userId: string): Promise<DbVideo[]> => {
@@ -132,6 +150,7 @@ export const useVideoStorage = () => {
 
   return {
     uploadVideoToStorage,
+    uploadBlobToStorage,
     getAllVideos,
     getVideoById,
     getVideosByStatus,

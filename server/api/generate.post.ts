@@ -12,27 +12,26 @@ import type { VideoModel, WaveSpeedResolution } from '~/types'
 const VIDEO_BASE_TOKEN = 2
 
 /**
- * Upload cropped image buffer to Supabase Storage for WaveSpeed (requires URL)
+ * Upload a temporary buffer to Supabase Storage and get its public URL.
+ * @param buffer The file content as a Buffer.
+ * @param filePath The path to store the file in the bucket (e.g., 'temp/audio.wav').
+ * @param contentType The MIME type of the file (e.g., 'audio/wav').
+ * @returns The public URL of the uploaded file.
  */
-async function uploadTempImage(buffer: Buffer, filename: string): Promise<string> {
-  // Use admin client to bypass RLS for temp folder uploads
+async function uploadTempBuffer(buffer: Buffer, filePath: string, contentType: string): Promise<string> {
   const supabase = getSupabaseAdmin()
-
-  // Upload to temp folder
-  const filePath = `temp/${filename}`
 
   const { error: uploadError } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, buffer, {
-      contentType: 'image/jpeg',
+      contentType,
       upsert: true,
     })
 
   if (uploadError) {
-    throw new Error(`Failed to upload temp image: ${uploadError.message}`)
+    throw new Error(`Failed to upload temp file (${contentType}): ${uploadError.message}`)
   }
 
-  // Get public URL
   const { data: urlData } = supabase.storage
     .from(STORAGE_BUCKET)
     .getPublicUrl(filePath)
@@ -40,10 +39,11 @@ async function uploadTempImage(buffer: Buffer, filename: string): Promise<string
   return urlData.publicUrl
 }
 
+
 /**
  * POST /api/generate
  *
- * Step 1: Generate TTS audio
+ * Step 1: Generate TTS audio, upload to get URL
  * Step 2: Crop avatar image
  * Step 3: Start video generation (Vidnoz or WaveSpeed based on videoModel)
  *
@@ -122,8 +122,12 @@ export default defineEventHandler(async (event) => {
 
     // 1. Generate audio from Inworld TTS
     console.log('Calling Inworld TTS...')
-    const { audioUrl: ttsAudioUrl } = await textToSpeech(transcript, speakerId)
-    console.log('Inworld TTS audio generated:', ttsAudioUrl)
+    const { audioUrl: ttsAudioDataUri } = await textToSpeech(transcript, speakerId)
+
+    // Decode Base64 data URI to a buffer
+    const audioBase64 = ttsAudioDataUri.split(',')[1]
+    const audioBuffer = Buffer.from(audioBase64, 'base64')
+    console.log('Decoded TTS audio buffer, size:', audioBuffer.length, 'bytes')
 
     // 2. Crop avatar image to target aspect ratio
     console.log('Cropping avatar image to aspect ratio:', aspectRatio)
@@ -135,19 +139,24 @@ export default defineEventHandler(async (event) => {
 
     let taskId: string
     let pollEndpoint: 'vidnoz' | 'wavespeed'
+    let publicTtsAudioUrl: string | undefined // To store URL for return value
 
     if (videoModel === 'wavespeed') {
-      // WaveSpeed flow: needs image URL, not buffer
+      // WaveSpeed flow: needs public URLs for both image and audio
       console.log('Using WaveSpeed for video generation...')
 
-      // Upload cropped image to get a URL
-      const tempFilename = `wavespeed_${Date.now()}.jpg`
-      const croppedImageUrl = await uploadTempImage(croppedBuffer, tempFilename)
+      // Upload audio and image to get public URLs
+      const audioFilePath = `temp/audio_${Date.now()}.wav`
+      publicTtsAudioUrl = await uploadTempBuffer(audioBuffer, audioFilePath, 'audio/wav')
+      console.log('TTS audio uploaded to public URL for WaveSpeed:', publicTtsAudioUrl)
+
+      const tempFilename = `temp/wavespeed_${Date.now()}.jpg`
+      const croppedImageUrl = await uploadTempBuffer(croppedBuffer, tempFilename, 'image/jpeg')
       console.log('Cropped image uploaded to:', croppedImageUrl)
 
       // Call WaveSpeed API
       const { requestId } = await generateWaveSpeedVideo({
-        audioUrl: ttsAudioUrl,
+        audioUrl: publicTtsAudioUrl,
         imageUrl: croppedImageUrl,
         prompt: waveSpeedPrompt,
         resolution: waveSpeedResolution,
@@ -157,9 +166,9 @@ export default defineEventHandler(async (event) => {
       taskId = requestId
       pollEndpoint = 'wavespeed'
     } else {
-      // Vidnoz flow: uses buffer directly
+      // Vidnoz flow: uses direct buffer uploads
       console.log('Using Vidnoz for video generation...')
-      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, ttsAudioUrl)
+      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, audioBuffer, waveSpeedResolution)
       console.log('Vidnoz task started, taskId:', vidnozTaskId)
 
       taskId = vidnozTaskId
@@ -195,18 +204,25 @@ export default defineEventHandler(async (event) => {
       pollEndpoint,
       transcript,
       aspectRatio,
-      audioUrl: ttsAudioUrl,
+      audioUrl: publicTtsAudioUrl, // Return the public URL
       createdAt: new Date().toISOString(),
       status: 'generating', // Frontend should poll for completion
       tokenConsumed,
       balanceAfter,
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Generation API Error:', error)
+
+    // Ensure we always have a structured error to return
+    const isErrorObject = error instanceof Error
+    const statusCode = (error as any)?.statusCode || 500
+    const message = isErrorObject ? (error as Error).message : 'An unexpected error occurred'
+    const details = isErrorObject ? (error as any).data?.details || message : String(error)
+
     throw createError({
-      statusCode: error.statusCode || 500,
-      message: error.message || 'Failed to generate video',
-      data: { details: error.message },
+      statusCode,
+      message,
+      data: { details },
     })
   }
 })

@@ -52,28 +52,39 @@ export async function generateTalkingVideo(
  */
 export async function generateTalkingVideoWithBuffer(
   avatarBuffer: Buffer,
-  audioUrl: string
+  audioBuffer: Buffer,
+  resolution: string = '720p'
 ): Promise<{ taskId: string }> {
   const url = `${VIDNOZ_API_BASE}/v2/task/generate-talking-head`
 
   const formData = new FormData()
 
-  // Use 'avatar' parameter to upload file directly (not URL)
-  // Convert Buffer to ArrayBuffer then create Blob
-  const arrayBuffer = avatarBuffer.buffer.slice(
+  // Create Blob for avatar
+  const avatarArrayBuffer = avatarBuffer.buffer.slice(
     avatarBuffer.byteOffset,
     avatarBuffer.byteOffset + avatarBuffer.byteLength
   ) as ArrayBuffer
-  const blob = new Blob([arrayBuffer], { type: 'image/jpeg' })
-  formData.append('avatar', blob, 'avatar.jpg')
-  formData.append('file_url', audioUrl)
-  formData.append('type', '2')
+  const avatarBlob = new Blob([avatarArrayBuffer], { type: 'image/jpeg' })
 
-  console.log('Sending Vidnoz generate video request with avatar buffer:', {
-    bufferSize: avatarBuffer.length,
-    audioUrl,
-    type: 2
-  })
+  // Create Blob for audio
+  const audioArrayBuffer = audioBuffer.buffer.slice(
+    audioBuffer.byteOffset,
+    audioBuffer.byteOffset + audioBuffer.byteLength
+  ) as ArrayBuffer
+  const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/wav' })
+
+  // Append both as files
+  formData.append('avatar', avatarBlob, 'avatar.jpg')
+  formData.append('file', audioBlob, 'audio.wav') // Use 'file' parameter for direct audio upload
+  formData.append('type', '2')
+  formData.append('resolution', resolution)
+
+  console.log('Preparing FormData for Vidnoz with direct file uploads:', {
+    avatarBlobSize: avatarBlob.size,
+    audioBlobSize: audioBlob.size,
+    type: '2',
+    resolution,
+  });
 
   const response = await fetch(url, {
     method: 'POST',

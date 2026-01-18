@@ -3,9 +3,9 @@
  */
 export const FANBAR_CONFIG = {
   productType: '888003',
-  functionId: '12521',
   platform: '3',
   tokensPerSubscription: 1200,
+  // functionId 已移至環境變數 NUXT_PUBLIC_FANBAR_FUNCTION_ID
 } as const
 
 /**

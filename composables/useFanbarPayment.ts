@@ -26,7 +26,7 @@ export const useFanbarPayment = () => {
 
     const checkoutUrl = new URL(config.public.fanbarCheckoutUrl)
     checkoutUrl.searchParams.set('productType', FANBAR_CONFIG.productType)
-    checkoutUrl.searchParams.set('functionId', FANBAR_CONFIG.functionId)
+    checkoutUrl.searchParams.set('functionId', config.public.fanbarFunctionId)
     checkoutUrl.searchParams.set('platform', FANBAR_CONFIG.platform)
     checkoutUrl.searchParams.set('returnUrl', returnUrl)
 
@@ -106,7 +106,7 @@ export const useFanbarPayment = () => {
 
     const checkoutUrl = new URL(config.public.fanbarCheckoutUrl)
     checkoutUrl.searchParams.set('productType', FANBAR_CONFIG.productType)
-    checkoutUrl.searchParams.set('functionId', FANBAR_CONFIG.functionId)
+    checkoutUrl.searchParams.set('functionId', config.public.fanbarFunctionId)
     checkoutUrl.searchParams.set('platform', FANBAR_CONFIG.platform)
     checkoutUrl.searchParams.set('returnUrl', returnUrl)
 

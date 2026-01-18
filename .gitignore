@@ -19,6 +19,7 @@ dist-ssr
 # Environment files (含敏感資訊)
 .env
 .env.*
+.env\ copy
 !.env.example
 
 # Local files

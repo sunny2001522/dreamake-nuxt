@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import type { SuggestedTopic, DbPersona } from "~/types";
-import { Mic, Sparkles } from "lucide-vue-next";
+import type { SuggestedTopic, MediaPlatform, DbPersona } from "~/types";
+import { Mic, Sparkles, Gem } from "lucide-vue-next";
 import SoundWaveIndicator from "~/components/common/SoundWaveIndicator.vue";
+import PlatformLogos from "~/components/icons/PlatformLogos.vue";
+
+// Channel analysis Token cost
+const ANALYSIS_TOKEN_COST = 1;
 
 const generationStore = useGenerationStore();
 const authStore = useAuthStore();
@@ -9,8 +13,7 @@ const preferencesStore = usePreferencesStore();
 const toastStore = useToastStore();
 const { draft } = storeToRefs(generationStore);
 
-// TODO: 後端修復後恢復 pendingAnalysesStore
-// const pendingAnalysesStore = usePendingAnalysesStore();
+const pendingAnalysesStore = usePendingAnalysesStore();
 
 // Props for persona content
 const props = defineProps<{
@@ -29,8 +32,7 @@ const emit = defineEmits<{
 
 // Transcript generation composable
 const transcriptGeneration = useTranscriptGeneration();
-// TODO: 後端修復後恢復 URL 分析功能
-// const mediaAnalysis = useMediaAnalysis();
+const mediaAnalysis = useMediaAnalysis();
 
 const maxLength = 500;
 const charCount = computed(() => draft.value.transcript.length);
@@ -44,12 +46,7 @@ const showPersonaModal = ref(false);
 const mediaUrl = ref("");
 const isAnalyzing = ref(false);
 const analysisResult = ref<string | null>(null);
-
-// TODO: 後端修復後恢復 URL 分析相關變數
-// const analysisPlatform = ref<MediaPlatform | null>(null);
-// const analysisFakeProgress = ref(0);
-// const isAnalyzingInSession = ref(false);
-// const currentJobId = ref<string | null>(null);
+const analysisPlatform = ref<MediaPlatform | null>(null);
 
 // Topic suggestions
 const topics = computed(() => transcriptGeneration.suggestedTopics.value);
@@ -63,8 +60,110 @@ const hasPersona = computed(
 // Track selected topic
 const selectedTopicId = ref<string | null>(null);
 
-// TODO: 後端修復後恢復 URL 驗證功能
-// Platform labels and URL validation are temporarily disabled
+// Platform labels
+const platformLabels: Record<MediaPlatform, string> = {
+  youtube: "YouTube",
+  twitch: "Twitch",
+  bilibili: "Bilibili",
+  tiktok: "TikTok",
+  podcast: "Podcast RSS",
+  other: "yt-dlp 支援平台",
+};
+
+// Podcast RSS URL detection helper
+function isPodcastRssUrl(hostname: string, pathname: string): boolean {
+  const podcastHosts = [
+    'feeds.fireside.fm', 'feeds.soundon.fm', 'anchor.fm',
+    'open.firstory.me', 'libsyn.com', 'feeds.buzzsprout.com',
+    'feeds.simplecast.com', 'feed.podbean.com', 'feeds.transistor.fm',
+    'feeds.megaphone.fm', 'feeds.acast.com'
+  ];
+
+  if (podcastHosts.some(h => hostname.includes(h))) return true;
+  if (pathname.endsWith('/rss') || pathname.endsWith('/feed') || pathname.endsWith('.xml')) return true;
+  return false;
+}
+
+// URL validation - supports both URLs and text input
+const urlValidation = computed(() => {
+  const input = mediaUrl.value.trim();
+  if (!input) {
+    return {
+      isValid: false,
+      platform: null as MediaPlatform | null,
+      error: null,
+      isUrl: false,
+    };
+  }
+
+  // Check if it's a URL
+  try {
+    const url = new URL(input);
+    const hostname = url.hostname.toLowerCase();
+    const pathname = url.pathname.toLowerCase();
+
+    // YouTube
+    if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+      return {
+        isValid: true,
+        platform: "youtube" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // Twitch
+    if (hostname.includes("twitch.tv")) {
+      return {
+        isValid: true,
+        platform: "twitch" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // Bilibili
+    if (hostname.includes("bilibili.com")) {
+      return {
+        isValid: true,
+        platform: "bilibili" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // TikTok
+    if (hostname.includes("tiktok.com")) {
+      return {
+        isValid: true,
+        platform: "tiktok" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // Podcast RSS Feed detection
+    if (isPodcastRssUrl(hostname, pathname)) {
+      return {
+        isValid: true,
+        platform: "podcast" as MediaPlatform,
+        error: null,
+        isUrl: true,
+      };
+    }
+    // Other yt-dlp supported URLs
+    return {
+      isValid: true,
+      platform: "other" as MediaPlatform,
+      error: null,
+      isUrl: true,
+    };
+  } catch {
+    // Not a URL - treat as text input (channel name or description)
+    return {
+      isValid: true,
+      platform: null as MediaPlatform | null,
+      error: null,
+      isUrl: false,
+    };
+  }
+});
 
 // Load saved personas on mount
 onMounted(async () => {
@@ -217,19 +316,53 @@ async function handleSelectTopic(topic: SuggestedTopic) {
 }
 
 async function handleAnalyzeMedia() {
-  const content = mediaUrl.value.trim();
-  if (!content) {
-    toastStore.warning("請輸入風格描述");
+  // 如果是純文字輸入，使用 saveTextPersona
+  if (!urlValidation.value.isUrl) {
+    const content = mediaUrl.value.trim();
+    if (!content) {
+      toastStore.warning("請輸入風格描述或頻道連結");
+      return;
+    }
+    await saveTextPersona(content);
     return;
   }
 
-  // 暫時停用 URL 分析，所有輸入都作為純文字儲存
-  // TODO: 後端修復後恢復 URL 分析功能
-  await saveTextPersona(content);
+  // URL 分析流程
+  if (!urlValidation.value.isValid) {
+    toastStore.warning(urlValidation.value.error || "請輸入有效的媒體網址");
+    return;
+  }
+
+  try {
+    isAnalyzing.value = true;
+    analysisPlatform.value = urlValidation.value.platform;
+
+    // 啟動分析任務（背景輪詢）
+    await mediaAnalysis.startAnalysis([
+      {
+        url: mediaUrl.value.trim(),
+        platform: urlValidation.value.platform!,
+        type: "channel",
+        isValid: true,
+      },
+    ]);
+
+    // 分析已在背景進行，顯示提示並關閉 Modal
+    toastStore.success("分析已啟動！", 5000);
+    toastStore.info("分析會在背景進行，完成後會自動通知您", 5000);
+    showPersonaModal.value = false;
+    mediaUrl.value = "";
+  } catch (err: any) {
+    console.error("Media analysis failed:", err);
+    toastStore.error("啟動分析失敗", err.message || "請稍後再試");
+  } finally {
+    isAnalyzing.value = false;
+  }
 }
 
 async function handleClearPersona() {
   analysisResult.value = null;
+  analysisPlatform.value = null;
   emit("personaUpdate", "");
 
   // Clear persona preference in Supabase
@@ -839,18 +972,77 @@ function handleTranscriptMicClick() {
 
             <div>
               <label class="block text-sm font-medium text-stone-700 mb-2"
-                >輸入風格描述</label
+                >貼上頻道連結</label
               >
-              <textarea
+              <input
                 v-model="mediaUrl"
-                rows="3"
-                placeholder="輸入你的創作風格描述，例如：輕鬆幽默、專業嚴謹、親切溫暖..."
-                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500 resize-none"
+                type="text"
+                placeholder="貼上 YouTube/TikTok 連結，AI 會學習你的風格"
+                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500"
+                @keyup.enter="handleAnalyzeMedia"
               />
+              <p
+                v-if="urlValidation.platform"
+                class="mt-1 text-xs text-green-600"
+              >
+                已識別平台：{{ platformLabels[urlValidation.platform] }}
+              </p>
+              <p
+                v-else-if="mediaUrl.trim() && !urlValidation.isUrl"
+                class="mt-1 text-xs text-blue-600"
+              >
+                將作為文字描述進行分析
+              </p>
             </div>
 
-            <!-- URL analysis temporarily disabled -->
-            <!-- TODO: 後端修復後恢復頻道分析功能 -->
+            <!-- Supported platforms with logos -->
+            <div>
+              <p class="text-xs text-stone-500 mb-2">支援的平台：</p>
+              <div class="flex flex-wrap gap-2">
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'youtube' ? 'opacity-100 bg-red-50' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="youtube" :size="16" />
+                  <span class="text-xs">YouTube</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'twitch' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="twitch" :size="16" />
+                  <span class="text-xs">Twitch</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'bilibili' ? 'opacity-100 bg-blue-50' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="bilibili" :size="16" />
+                  <span class="text-xs">Bilibili</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'tiktok' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="tiktok" :size="16" />
+                  <span class="text-xs">TikTok</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'podcast' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="podcast" :size="16" />
+                  <span class="text-xs">Podcast</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                  :class="urlValidation.platform === 'other' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
+                >
+                  <PlatformLogos platform="other" :size="16" />
+                  <span class="text-xs">yt-dlp</span>
+                </div>
+              </div>
+            </div>
 
             <div class="p-3 bg-stone-50 rounded-xl">
               <p class="text-xs text-stone-500">
@@ -894,7 +1086,24 @@ function handleTranscriptMicClick() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              {{ isAnalyzing ? "儲存中..." : "儲存" }}
+              <svg
+                v-else
+                class="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
+              </svg>
+              {{ isAnalyzing ? "分析中..." : "開始分析" }}
+              <span v-if="!isAnalyzing" class="flex items-center gap-0.5 text-white/80">
+                <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
+              </span>
             </button>
           </div>
         </div>
