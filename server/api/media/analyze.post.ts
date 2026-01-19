@@ -1,4 +1,5 @@
 import { parseMediaUrl } from '~/server/utils/media/urlParser'
+import { getSupabaseAdmin } from '~/server/utils/supabase-admin'
 
 const DEFAULT_CHANNEL_LIMIT = 10  // 頻道分析預設 10 支影片（避免 rate limit）
 const MAX_URLS = 10  // 單次請求最多 10 個 URL
@@ -6,6 +7,7 @@ const API_TIMEOUT_MS = 30000  // 30 秒超時
 
 interface AnalyzeRequest {
   items: Array<{ url: string; limit?: number }>
+  user_id: string
 }
 
 /**
@@ -22,9 +24,17 @@ export default defineEventHandler(async (event) => {
 
   try {
     const body: AnalyzeRequest = await readBody(event)
-    const { items } = body
+    const { items, user_id } = body
 
     console.log('[Media Analyze] Received items:', JSON.stringify(items, null, 2))
+
+    // 驗證 user_id
+    if (!user_id) {
+      throw createError({
+        statusCode: 400,
+        message: 'user_id is required',
+      })
+    }
 
     // 驗證請求
     if (!items || items.length === 0) {
@@ -115,9 +125,43 @@ export default defineEventHandler(async (event) => {
         return acc
       }, {} as Record<string, number>)
 
+      // 將任務存入數據庫（使用 admin client 繞過 RLS）
+      const supabase = getSupabaseAdmin()
+      const { data: pendingData, error: insertError } = await supabase
+        .from('pending_analyses')
+        .insert({
+          user_id,
+          job_id: result.job_id,
+          source_urls: validItems.map(item => item.url),
+          platforms: validItems.map(item => item.parsed.platform),
+          status: 'pending',
+        })
+        .select()
+        .single()
+
+      if (insertError || !pendingData) {
+        console.error('[Media Analyze] Failed to save pending analysis:', insertError)
+        throw createError({
+          statusCode: 500,
+          message: 'Failed to save analysis task',
+        })
+      }
+
+      console.log('[Media Analyze] Pending analysis saved:', pendingData.id)
+
       return {
         success: true,
         job_id: result.job_id,
+        pending_id: pendingData.id,
+        pending_data: {
+          id: pendingData.id,
+          job_id: pendingData.job_id,
+          source_urls: pendingData.source_urls,
+          platforms: pendingData.platforms,
+          status: pendingData.status,
+          created_at: pendingData.created_at,
+          updated_at: pendingData.updated_at,
+        },
         message: result.message || '任務已建立',
         items_summary: {
           total: items.length,

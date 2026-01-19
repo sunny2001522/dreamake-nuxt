@@ -57,6 +57,7 @@ export default defineEventHandler(async (event) => {
       aspectRatio,
       speakerId,
       avatarUrl,
+      avatarRotation = 0,
       videoModel = 'vidnoz' as VideoModel,
       waveSpeedPrompt = DEFAULT_WAVESPEED_PROMPT,
       waveSpeedResolution = '720p' as WaveSpeedResolution,
@@ -129,11 +130,12 @@ export default defineEventHandler(async (event) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     console.log('Decoded TTS audio buffer, size:', audioBuffer.length, 'bytes')
 
-    // 2. Crop avatar image to target aspect ratio
-    console.log('Cropping avatar image to aspect ratio:', aspectRatio)
+    // 2. Crop avatar image to target aspect ratio (with optional rotation)
+    console.log('Cropping avatar image to aspect ratio:', aspectRatio, 'rotation:', avatarRotation)
     const croppedBuffer = await cropImageToAspectRatio({
       imageUrl: avatarUrl,
-      aspectRatio: aspectRatio || 'portrait'
+      aspectRatio: aspectRatio || 'portrait',
+      rotation: avatarRotation,
     })
     console.log('Cropped avatar buffer size:', croppedBuffer.length, 'bytes')
 
@@ -168,7 +170,7 @@ export default defineEventHandler(async (event) => {
     } else {
       // Vidnoz flow: uses direct buffer uploads
       console.log('Using Vidnoz for video generation...')
-      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, audioBuffer, waveSpeedResolution)
+      const { taskId: vidnozTaskId } = await generateTalkingVideoWithBuffer(croppedBuffer, audioBuffer)
       console.log('Vidnoz task started, taskId:', vidnozTaskId)
 
       taskId = vidnozTaskId

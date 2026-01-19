@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import type { SuggestedTopic, MediaPlatform, DbPersona } from "~/types";
-import { Mic, Sparkles, Gem } from "lucide-vue-next";
+import {
+  Mic,
+  Sparkles,
+  Gem,
+  Brain,
+  Pen,
+  Lightbulb,
+  Check,
+} from "lucide-vue-next";
 import SoundWaveIndicator from "~/components/common/SoundWaveIndicator.vue";
 import PlatformLogos from "~/components/icons/PlatformLogos.vue";
 
@@ -25,6 +33,117 @@ const savedPersonas = ref<DbPersona[]>([]);
 const isLoadingPersonas = ref(false);
 const currentPersonaId = ref<string | null>(null);
 const expandedPersonaId = ref<string | null>(null);
+
+// Inline editing state
+const editingPersonaId = ref<string | null>(null);
+const editingField = ref<"name" | "content" | null>(null);
+const editedName = ref("");
+const editedContent = ref("");
+const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const isSaving = ref(false);
+
+// Pending analyses (for progress display)
+const pendingAnalyses = computed(() => pendingAnalysesStore.analyses);
+
+// Analysis progress animation
+const analysisMessages = [
+  "正在深入分析你的風格...",
+  "學習中，請稍候 ☕",
+  "AI 正在認真做筆記...",
+  "快好了，再等一下下...",
+  "正在萃取精華 ✨",
+  "你的創作風格即將誕生...",
+];
+
+const analysisMessageIndex = ref(0);
+const currentAnalysisMessage = computed(
+  () => analysisMessages[analysisMessageIndex.value],
+);
+let analysisMessageTimer: ReturnType<typeof setInterval> | null = null;
+
+// Stage simulation (since backend doesn't provide real stages)
+const analysisStage = ref(0); // 0, 1, 2
+let stageTimer: ReturnType<typeof setInterval> | null = null;
+
+// Start animation when analysis begins
+watch(
+  () => pendingAnalyses.value.length,
+  (count, oldCount) => {
+    if (count > 0 && (oldCount === undefined || count > oldCount)) {
+      startAnalysisAnimation();
+    } else if (count === 0) {
+      stopAnalysisAnimation();
+    }
+  },
+  { immediate: true },
+);
+
+function startAnalysisAnimation() {
+  analysisStage.value = 0;
+  analysisMessageIndex.value = 0;
+
+  // Rotate messages every 6 seconds
+  if (analysisMessageTimer) clearInterval(analysisMessageTimer);
+  analysisMessageTimer = setInterval(() => {
+    analysisMessageIndex.value =
+      (analysisMessageIndex.value + 1) % analysisMessages.length;
+  }, 6000);
+
+  // Progress through stages (simulated: ~2min per stage, total ~6min)
+  if (stageTimer) clearInterval(stageTimer);
+  stageTimer = setInterval(() => {
+    if (analysisStage.value < 2) {
+      analysisStage.value++;
+    }
+  }, 120000); // 2 minutes per stage
+}
+
+function stopAnalysisAnimation() {
+  if (analysisMessageTimer) {
+    clearInterval(analysisMessageTimer);
+    analysisMessageTimer = null;
+  }
+  if (stageTimer) {
+    clearInterval(stageTimer);
+    stageTimer = null;
+  }
+  analysisStage.value = 0;
+}
+
+// Node styling (same pattern as VideoPreview)
+function getAnalysisNodeClass(index: number) {
+  const base =
+    "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300";
+  if (index < analysisStage.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500 text-white`;
+  }
+  if (index === analysisStage.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500 text-white animate-pulse ring-4 ring-purple-400/30`;
+  }
+  return `${base} bg-stone-300 text-stone-500`;
+}
+
+function getAnalysisLineClass(index: number) {
+  const base = "w-6 h-1 rounded-full transition-all duration-300";
+  if (index < analysisStage.value) {
+    return `${base} bg-gradient-to-r from-purple-500 to-pink-500`;
+  }
+  return `${base} bg-stone-300`;
+}
+
+// Estimated time
+const analysisEstimatedTime = computed(() => {
+  const stagesLeft = 3 - analysisStage.value;
+  const secondsLeft = stagesLeft * 120; // 2 min per stage
+  if (secondsLeft <= 0) return "即將完成";
+  const mins = Math.floor(secondsLeft / 60);
+  return `約 ${mins} 分鐘`;
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopAnalysisAnimation();
+});
 
 const emit = defineEmits<{
   personaUpdate: [content: string];
@@ -51,10 +170,10 @@ const analysisPlatform = ref<MediaPlatform | null>(null);
 // Topic suggestions
 const topics = computed(() => transcriptGeneration.suggestedTopics.value);
 const isLoadingTopics = computed(
-  () => transcriptGeneration.isLoadingTopics.value
+  () => transcriptGeneration.isLoadingTopics.value,
 );
 const hasPersona = computed(
-  () => !!props.personaContent?.trim() || !!analysisResult.value
+  () => !!props.personaContent?.trim() || !!analysisResult.value,
 );
 
 // Track selected topic
@@ -73,14 +192,26 @@ const platformLabels: Record<MediaPlatform, string> = {
 // Podcast RSS URL detection helper
 function isPodcastRssUrl(hostname: string, pathname: string): boolean {
   const podcastHosts = [
-    'feeds.fireside.fm', 'feeds.soundon.fm', 'anchor.fm',
-    'open.firstory.me', 'libsyn.com', 'feeds.buzzsprout.com',
-    'feeds.simplecast.com', 'feed.podbean.com', 'feeds.transistor.fm',
-    'feeds.megaphone.fm', 'feeds.acast.com'
+    "feeds.fireside.fm",
+    "feeds.soundon.fm",
+    "anchor.fm",
+    "open.firstory.me",
+    "libsyn.com",
+    "feeds.buzzsprout.com",
+    "feeds.simplecast.com",
+    "feed.podbean.com",
+    "feeds.transistor.fm",
+    "feeds.megaphone.fm",
+    "feeds.acast.com",
   ];
 
-  if (podcastHosts.some(h => hostname.includes(h))) return true;
-  if (pathname.endsWith('/rss') || pathname.endsWith('/feed') || pathname.endsWith('.xml')) return true;
+  if (podcastHosts.some((h) => hostname.includes(h))) return true;
+  if (
+    pathname.endsWith("/rss") ||
+    pathname.endsWith("/feed") ||
+    pathname.endsWith(".xml")
+  )
+    return true;
   return false;
 }
 
@@ -181,7 +312,7 @@ watch(
     } else {
       savedPersonas.value = [];
     }
-  }
+  },
 );
 
 async function loadSavedPersonas() {
@@ -208,7 +339,7 @@ watch(
       await loadTopics(content);
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // Watch for preferences changes and load saved persona
@@ -226,7 +357,7 @@ watch(
           emit("personaUpdate", persona.content);
           console.log(
             "Applied default persona from preferences:",
-            persona.name
+            persona.name,
           );
         }
       } catch (err) {
@@ -235,7 +366,7 @@ watch(
     } else if (!personaId) {
       currentPersonaId.value = null;
     }
-  }
+  },
 );
 
 function handleInput(value: string) {
@@ -254,7 +385,7 @@ async function handleExpandTranscript() {
     toastStore.info("正在擴寫腳本...");
     const transcript = await transcriptGeneration.generateTranscript(
       currentText,
-      analysisResult.value || props.personaContent
+      analysisResult.value || props.personaContent,
     );
     generationStore.updateDraft({ transcript });
     toastStore.success("腳本擴寫完成！");
@@ -272,7 +403,7 @@ async function handleGenerateTitle() {
 
   try {
     const title = await transcriptGeneration.generateTitle(
-      draft.value.transcript
+      draft.value.transcript,
     );
     generationStore.updateDraft({ title });
     toastStore.success("標題生成完成！");
@@ -305,7 +436,7 @@ async function handleSelectTopic(topic: SuggestedTopic) {
   try {
     toastStore.info("正在生成腳本...");
     const transcript = await transcriptGeneration.generateTranscript(
-      topic.title
+      topic.title,
     );
     generationStore.updateDraft({ transcript, title: topic.title });
     toastStore.success("腳本生成完成！");
@@ -313,6 +444,15 @@ async function handleSelectTopic(topic: SuggestedTopic) {
     console.error("Failed to generate transcript:", err);
     toastStore.error("生成失敗", err.message || "請稍後再試");
   }
+}
+
+// Handle Enter key in textarea: Shift+Enter = newline, Enter = submit
+function handleEnterKey(event: KeyboardEvent) {
+  if (!event.shiftKey) {
+    event.preventDefault();
+    handleAnalyzeMedia();
+  }
+  // Shift+Enter: allow default behavior (newline)
 }
 
 async function handleAnalyzeMedia() {
@@ -347,10 +487,7 @@ async function handleAnalyzeMedia() {
       },
     ]);
 
-    // 分析已在背景進行，顯示提示並關閉 Modal
-    toastStore.success("分析已啟動！", 5000);
-    toastStore.info("分析會在背景進行，完成後會自動通知您", 5000);
-    showPersonaModal.value = false;
+    // 分析已在背景進行，保持 Modal 開啟顯示進度動畫
     mediaUrl.value = "";
   } catch (err: any) {
     console.error("Media analysis failed:", err);
@@ -358,6 +495,12 @@ async function handleAnalyzeMedia() {
   } finally {
     isAnalyzing.value = false;
   }
+}
+
+// Cancel ongoing analysis
+async function handleCancelAnalysis(jobId: string | undefined) {
+  if (!jobId) return;
+  await pendingAnalysesStore.cancelAnalysis(jobId);
 }
 
 async function handleClearPersona() {
@@ -452,7 +595,7 @@ async function saveTextPersona(content: string) {
         job_id: null,
         user_id: userId,
       },
-      userId
+      userId,
     );
 
     // 套用並更新 UI
@@ -482,6 +625,95 @@ function toggleExpandPersona(personaId: string, event: Event) {
   event.stopPropagation();
   expandedPersonaId.value =
     expandedPersonaId.value === personaId ? null : personaId;
+}
+
+// Get persona title (for display and editing)
+function getPersonaTitle(persona: DbPersona): string {
+  return parseAnalysisTitle(persona.content) || persona.name;
+}
+
+// Start inline editing
+function startEditing(
+  persona: DbPersona,
+  field: "name" | "content",
+  event: Event,
+) {
+  event.stopPropagation();
+  editingPersonaId.value = persona.id;
+  editingField.value = field;
+  if (field === "name") {
+    editedName.value = getPersonaTitle(persona);
+  } else {
+    editedContent.value = persona.content;
+  }
+}
+
+// Debounced save (3 seconds after last input)
+function debouncedSave(personaId: string, field: "name" | "content") {
+  if (saveTimer.value) {
+    clearTimeout(saveTimer.value);
+  }
+  saveTimer.value = setTimeout(() => {
+    savePersonaEdit(personaId, field);
+  }, 3000);
+}
+
+// Save persona edit
+async function savePersonaEdit(personaId: string, field: "name" | "content") {
+  isSaving.value = true;
+  try {
+    const { updatePersona } = usePersonaStorage();
+    const persona = savedPersonas.value.find((p) => p.id === personaId);
+    if (!persona) return;
+
+    let newContent = persona.content;
+    if (field === "name") {
+      // Update the first line (title) in content
+      const lines = persona.content.split("\n");
+      if (lines[0]?.startsWith("#")) {
+        lines[0] = `# ${editedName.value}`;
+      } else {
+        lines.unshift(`# ${editedName.value}`);
+      }
+      newContent = lines.join("\n");
+    } else {
+      newContent = editedContent.value;
+    }
+
+    await updatePersona(personaId, { content: newContent });
+    await loadSavedPersonas();
+    toastStore.success("風格已更新");
+  } catch (err) {
+    console.error("Failed to save persona edit:", err);
+    toastStore.error("更新失敗");
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+// Finish editing (blur or enter)
+async function finishEditing() {
+  if (saveTimer.value) {
+    clearTimeout(saveTimer.value);
+    saveTimer.value = null;
+  }
+  // 無論 timer 狀態，只要正在編輯就儲存
+  if (editingPersonaId.value && editingField.value) {
+    await savePersonaEdit(editingPersonaId.value, editingField.value);
+  }
+  editingPersonaId.value = null;
+  editingField.value = null;
+}
+
+// Get analysis name from URL
+function getAnalysisName(analysis: {
+  sourceUrls: string[];
+  platforms: string[];
+}): string {
+  const url = analysis.sourceUrls[0];
+  if (!url) return analysis.platforms[0] + " 頻道";
+  const match = url.match(/@([^/?]+)/);
+  return match ? match[1] : analysis.platforms[0] + " 頻道";
 }
 
 // Parse title from analysis content
@@ -516,7 +748,7 @@ const transcriptInterimText = ref("");
 // Display text combining confirmed and interim results
 const displayTitle = computed(() => draft.value.title + titleInterimText.value);
 const displayTranscript = computed(
-  () => draft.value.transcript + transcriptInterimText.value
+  () => draft.value.transcript + transcriptInterimText.value,
 );
 
 // Speech recognition for title
@@ -609,32 +841,17 @@ function handleTranscriptMicClick() {
           <Sparkles class="w-4 h-4" />
           設定創作風格
         </button>
-        
       </div>
     </div>
 
-    <!-- Topic chips (compact) -->
-    <div v-if="isLoadingTopics" class="flex items-center py-2">
-      <svg
-        class="animate-spin w-4 h-4 text-purple-500 mr-2"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        />
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        />
-      </svg>
-      <span class="text-xs text-stone-500">生成中...</span>
+    <!-- Topic chips (compact) - Skeleton loading -->
+    <div v-if="isLoadingTopics" class="flex gap-1.5 mb-2 py-1">
+      <div
+        v-for="i in 4"
+        :key="i"
+        class="animate-pulse h-6 bg-stone-200 rounded-full"
+        :style="{ width: `${60 + i * 10}px` }"
+      />
     </div>
 
     <div
@@ -762,10 +979,10 @@ function handleTranscriptMicClick() {
       <div
         v-if="showPersonaModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        @click="showPersonaModal = false"
+        @mousedown.self="showPersonaModal = false"
       >
         <div
-          class="bg-white rounded-2xl overflow-hidden border border-stone-200 shadow-2xl w-[500px] max-w-[90vw]"
+          class="bg-white rounded-2xl overflow-hidden border border-stone-200 shadow-2xl w-125 max-w-[90vw]"
           @click.stop
         >
           <!-- Header -->
@@ -795,8 +1012,183 @@ function handleTranscriptMicClick() {
 
           <!-- Content -->
           <div class="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-            <!-- TODO: 後端修復後恢復分析進度顯示 -->
-            <!-- Pending analyses progress is temporarily hidden -->
+            <!-- Pending analyses progress - 3 stage animation -->
+            <div v-if="pendingAnalyses.length > 0" class="space-y-4">
+              <div
+                class="bg-gradient-to-br from-purple-900 to-stone-900 rounded-2xl p-6 text-center"
+              >
+                <!-- 3-stage timeline -->
+                <div class="flex items-center justify-center gap-1 mb-3">
+                  <!-- Stage 1: 人格腦 -->
+                  <div class="flex flex-col items-center gap-1.5">
+                    <div :class="getAnalysisNodeClass(0)">
+                      <Check v-if="analysisStage > 0" class="w-5 h-5" />
+                      <Brain v-else class="w-5 h-5" />
+                    </div>
+                    <span class="text-white/60 text-xs">人格腦</span>
+                  </div>
+
+                  <!-- Line 1 -->
+                  <div :class="getAnalysisLineClass(0)" class="mb-5" />
+
+                  <!-- Stage 2: 記憶腦 -->
+                  <div class="flex flex-col items-center gap-1.5">
+                    <div :class="getAnalysisNodeClass(1)">
+                      <Check v-if="analysisStage > 1" class="w-5 h-5" />
+                      <Sparkles v-else class="w-5 h-5" />
+                    </div>
+                    <span class="text-white/60 text-xs">記憶腦</span>
+                  </div>
+
+                  <!-- Line 2 -->
+                  <div :class="getAnalysisLineClass(1)" class="mb-5" />
+
+                  <!-- Stage 3: 創作腦 -->
+                  <div class="flex flex-col items-center gap-1.5">
+                    <div :class="getAnalysisNodeClass(2)">
+                      <Check v-if="analysisStage > 2" class="w-5 h-5" />
+                      <Pen v-else class="w-5 h-5" />
+                    </div>
+                    <span class="text-white/60 text-xs">創作腦</span>
+                  </div>
+                </div>
+
+                <!-- Encouraging message -->
+                <p class="text-white text-lg font-medium mb-2">
+                  {{ currentAnalysisMessage }}
+                </p>
+
+                <!-- Channel name being analyzed -->
+                <p class="text-white/70 text-sm mb-3">
+                  正在分析：{{ getAnalysisName(pendingAnalyses[0]) }}
+                </p>
+
+                <!-- Hint: can close -->
+                <div
+                  class="flex items-center justify-center gap-1.5 text-white/50 text-xs mb-4"
+                >
+                  <Lightbulb class="w-3.5 h-3.5" />
+                  <span
+                    >預估還需
+                    {{ analysisEstimatedTime }}，可以先離開，萃取好會有 Toast
+                    通知</span
+                  >
+                </div>
+
+                <!-- Cancel button -->
+                <button
+                  class="px-4 py-2 text-sm text-white/70 hover:text-white border border-white/30 hover:border-white/50 rounded-lg transition-colors"
+                  @click="handleCancelAnalysis(pendingAnalyses[0]?.jobId)"
+                >
+                  取消分析
+                </button>
+              </div>
+            </div>
+
+            <!-- 新增風格 section (moved above saved personas) -->
+            <div>
+              <label class="block text-sm font-medium text-stone-700 mb-2"
+                >新增風格</label
+              >
+              <textarea
+                v-model="mediaUrl"
+                rows="2"
+                placeholder="貼上社群連結或輸入設定，AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本"
+                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500 resize-none"
+                @keydown.enter="handleEnterKey"
+              />
+
+              <!-- Supported platforms with logos -->
+              <div class="mt-1">
+                <div class="flex flex-wrap gap-2">
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                    :class="
+                      urlValidation.platform === 'youtube'
+                        ? 'opacity-100 bg-red-50'
+                        : 'opacity-40'
+                    "
+                  >
+                    <PlatformLogos platform="youtube" :size="16" />
+                    <span class="text-xs">YouTube</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                    :class="
+                      urlValidation.platform === 'twitch'
+                        ? 'opacity-100 bg-purple-50'
+                        : 'opacity-40'
+                    "
+                  >
+                    <PlatformLogos platform="twitch" :size="16" />
+                    <span class="text-xs">Twitch</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                    :class="
+                      urlValidation.platform === 'bilibili'
+                        ? 'opacity-100 bg-blue-50'
+                        : 'opacity-40'
+                    "
+                  >
+                    <PlatformLogos platform="bilibili" :size="16" />
+                    <span class="text-xs">Bilibili</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                    :class="
+                      urlValidation.platform === 'tiktok'
+                        ? 'opacity-100 bg-stone-100'
+                        : 'opacity-40'
+                    "
+                  >
+                    <PlatformLogos platform="tiktok" :size="16" />
+                    <span class="text-xs">TikTok</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
+                    :class="
+                      urlValidation.platform === 'podcast'
+                        ? 'opacity-100 bg-purple-50'
+                        : 'opacity-40'
+                    "
+                  >
+                    <PlatformLogos platform="podcast" :size="16" />
+                    <span class="text-xs">Podcast</span>
+                  </div>
+                </div>
+              </div>
+              <!-- 開始分析 button directly below input -->
+              <button
+                class="w-full mt-3 px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                :disabled="!mediaUrl.trim()"
+                @click="handleAnalyzeMedia"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  />
+                </svg>
+                <span>開始分析</span>
+                <span class="flex items-center gap-0.5 text-white/80">
+                  <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Divider -->
+            <div
+              v-if="savedPersonas.length > 0"
+              class="border-t border-stone-200 pt-4"
+            />
 
             <!-- Saved personas list -->
             <div v-if="savedPersonas.length > 0" class="space-y-2">
@@ -818,7 +1210,7 @@ function handleTranscriptMicClick() {
                 </svg>
                 已儲存的風格 ({{ savedPersonas.length }})
               </label>
-              <div class="space-y-2 max-h-64 overflow-y-auto">
+              <div class="space-y-2">
                 <div
                   v-for="persona in savedPersonas"
                   :key="persona.id"
@@ -832,12 +1224,37 @@ function handleTranscriptMicClick() {
                   <div class="p-3" @click="handleSelectPersona(persona)">
                     <div class="flex items-center justify-between">
                       <div class="flex-1 min-w-0">
+                        <!-- Editable name -->
                         <div
-                          class="text-sm font-medium text-stone-800 truncate"
+                          v-if="
+                            editingPersonaId === persona.id &&
+                            editingField === 'name'
+                          "
+                          class="flex items-center gap-2"
+                          @click.stop
                         >
-                          {{
-                            parseAnalysisTitle(persona.content) || persona.name
-                          }}
+                          <input
+                            v-model="editedName"
+                            type="text"
+                            class="flex-1 text-sm font-medium text-stone-800 bg-transparent border-b-2 border-purple-500 outline-none py-0.5"
+                            autofocus
+                            @input="debouncedSave(persona.id, 'name')"
+                            @blur="finishEditing"
+                            @keydown.enter="finishEditing"
+                          />
+                          <span
+                            v-if="isSaving"
+                            class="text-xs text-purple-500 animate-pulse flex-shrink-0"
+                            >儲存中...</span
+                          >
+                        </div>
+                        <div
+                          v-else
+                          class="text-sm font-medium text-stone-800 truncate cursor-pointer hover:text-purple-600 transition-colors"
+                          title="點擊編輯名稱"
+                          @click="startEditing(persona, 'name', $event)"
+                        >
+                          {{ getPersonaTitle(persona) }}
                         </div>
                         <div class="text-xs text-stone-500 mt-0.5">
                           {{ persona.platforms.join(", ") }} · 已使用
@@ -908,8 +1325,34 @@ function handleTranscriptMicClick() {
                       class="px-3 pb-3 overflow-hidden"
                     >
                       <div class="pt-2 border-t border-stone-200">
+                        <!-- Editable content -->
+                        <div
+                          v-if="
+                            editingPersonaId === persona.id &&
+                            editingField === 'content'
+                          "
+                          @click.stop
+                        >
+                          <textarea
+                            v-model="editedContent"
+                            class="w-full h-48 text-xs text-stone-600 whitespace-pre-wrap font-sans bg-stone-50 border-2 border-purple-500 rounded-lg p-2 outline-none resize-none"
+                            autofocus
+                            @input="debouncedSave(persona.id, 'content')"
+                            @blur="finishEditing"
+                          />
+                          <div class="flex justify-end mt-1">
+                            <span
+                              v-if="isSaving"
+                              class="text-xs text-purple-500 animate-pulse"
+                              >儲存中...</span
+                            >
+                          </div>
+                        </div>
                         <pre
-                          class="text-xs text-stone-600 whitespace-pre-wrap font-sans max-h-48 overflow-y-auto"
+                          v-else
+                          class="text-xs text-stone-600 whitespace-pre-wrap font-sans max-h-48 overflow-y-auto cursor-pointer hover:bg-stone-50 rounded p-1 transition-colors"
+                          title="點擊編輯內容"
+                          @click="startEditing(persona, 'content', $event)"
                           >{{ persona.content }}</pre
                         >
                       </div>
@@ -919,197 +1362,29 @@ function handleTranscriptMicClick() {
               </div>
             </div>
 
-            <!-- Loading state -->
-            <div
-              v-else-if="isLoadingPersonas"
-              class="flex items-center justify-center py-4"
-            >
-              <svg
-                class="animate-spin w-5 h-5 text-purple-500"
-                fill="none"
-                viewBox="0 0 24 24"
+            <!-- Loading state - Skeleton cards -->
+            <div v-else-if="isLoadingPersonas" class="space-y-2">
+              <div
+                v-for="i in 3"
+                :key="i"
+                class="animate-pulse rounded-xl border-2 border-stone-200 p-3"
               >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            </div>
-
-            <!-- Divider -->
-            <div
-              v-if="savedPersonas.length > 0"
-              class="border-t border-stone-200 pt-4"
-            >
-              <label
-                class="text-sm font-medium text-stone-600 flex items-center gap-2 mb-2"
-              >
-                <svg
-                  class="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                新增風格
-              </label>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-stone-700 mb-2"
-                >貼上頻道連結</label
-              >
-              <input
-                v-model="mediaUrl"
-                type="text"
-                placeholder="貼上 YouTube/TikTok 連結，AI 會學習你的風格"
-                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500"
-                @keyup.enter="handleAnalyzeMedia"
-              />
-              <p
-                v-if="urlValidation.platform"
-                class="mt-1 text-xs text-green-600"
-              >
-                已識別平台：{{ platformLabels[urlValidation.platform] }}
-              </p>
-              <p
-                v-else-if="mediaUrl.trim() && !urlValidation.isUrl"
-                class="mt-1 text-xs text-blue-600"
-              >
-                將作為文字描述進行分析
-              </p>
-            </div>
-
-            <!-- Supported platforms with logos -->
-            <div>
-              <p class="text-xs text-stone-500 mb-2">支援的平台：</p>
-              <div class="flex flex-wrap gap-2">
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'youtube' ? 'opacity-100 bg-red-50' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="youtube" :size="16" />
-                  <span class="text-xs">YouTube</span>
-                </div>
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'twitch' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="twitch" :size="16" />
-                  <span class="text-xs">Twitch</span>
-                </div>
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'bilibili' ? 'opacity-100 bg-blue-50' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="bilibili" :size="16" />
-                  <span class="text-xs">Bilibili</span>
-                </div>
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'tiktok' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="tiktok" :size="16" />
-                  <span class="text-xs">TikTok</span>
-                </div>
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'podcast' ? 'opacity-100 bg-purple-50' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="podcast" :size="16" />
-                  <span class="text-xs">Podcast</span>
-                </div>
-                <div
-                  class="flex items-center gap-1.5 px-2 py-1 rounded-full transition-opacity"
-                  :class="urlValidation.platform === 'other' ? 'opacity-100 bg-stone-100' : 'opacity-40'"
-                >
-                  <PlatformLogos platform="other" :size="16" />
-                  <span class="text-xs">yt-dlp</span>
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="h-4 w-32 bg-stone-200 rounded mb-2" />
+                    <div class="h-3 w-24 bg-stone-100 rounded" />
+                  </div>
+                  <div class="flex gap-1">
+                    <div class="h-6 w-6 bg-stone-200 rounded-lg" />
+                    <div class="h-6 w-6 bg-stone-200 rounded-lg" />
+                  </div>
                 </div>
               </div>
             </div>
-
-            <div class="p-3 bg-stone-50 rounded-xl">
-              <p class="text-xs text-stone-500">
-                AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本。
-              </p>
-            </div>
-          </div>
-
-          <!-- Footer -->
-          <div
-            class="px-4 py-3 border-t border-stone-200 flex justify-end gap-2"
-          >
-            <button
-              class="px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
-              @click="showPersonaModal = false"
-            >
-              取消
-            </button>
-            <button
-              class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-              :disabled="!mediaUrl.trim() || isAnalyzing"
-              @click="handleAnalyzeMedia"
-            >
-              <svg
-                v-if="isAnalyzing"
-                class="animate-spin w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              <svg
-                v-else
-                class="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                />
-              </svg>
-              {{ isAnalyzing ? "分析中..." : "開始分析" }}
-              <span v-if="!isAnalyzing" class="flex items-center gap-0.5 text-white/80">
-                <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
-              </span>
-            </button>
           </div>
         </div>
       </div>
     </Teleport>
-
   </div>
 </template>
 

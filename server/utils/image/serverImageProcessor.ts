@@ -8,6 +8,7 @@ import sharp from 'sharp'
 export interface CropImageOptions {
   imageUrl: string
   aspectRatio: 'portrait' | 'landscape'
+  rotation?: number // 旋轉角度 (0, 90, 180, 270)
 }
 
 // Target output resolutions (matching original FFmpeg implementation)
@@ -27,10 +28,10 @@ const TARGET_RESOLUTIONS = {
 export async function cropImageToAspectRatio(
   options: CropImageOptions
 ): Promise<Buffer> {
-  const { imageUrl, aspectRatio } = options
+  const { imageUrl, aspectRatio, rotation = 0 } = options
   const { width: targetWidth, height: targetHeight } = TARGET_RESOLUTIONS[aspectRatio]
 
-  console.log('Sharp cropping image:', { imageUrl: imageUrl.substring(0, 50) + '...', aspectRatio })
+  console.log('Sharp cropping image:', { imageUrl: imageUrl.substring(0, 50) + '...', aspectRatio, rotation })
 
   // 1. Fetch the image from URL
   const response = await fetch(imageUrl)
@@ -40,8 +41,16 @@ export async function cropImageToAspectRatio(
 
   const imageBuffer = Buffer.from(await response.arrayBuffer())
 
-  // 2. Use Sharp to resize with cover (center crop) and output JPEG
-  const processedBuffer = await sharp(imageBuffer)
+  // 2. Use Sharp to rotate (if needed), resize with cover (center crop) and output JPEG
+  let sharpInstance = sharp(imageBuffer)
+
+  // Apply rotation if specified (normalize negative values to 0, 90, 180, 270)
+  if (rotation && rotation !== 0) {
+    const normalizedRotation = ((rotation % 360) + 360) % 360
+    sharpInstance = sharpInstance.rotate(normalizedRotation)
+  }
+
+  const processedBuffer = await sharpInstance
     .resize(targetWidth, targetHeight, {
       fit: 'cover',        // Crops to fill dimensions (like FFmpeg crop filter)
       position: 'center',  // Center crop

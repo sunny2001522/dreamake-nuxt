@@ -4,13 +4,29 @@ import { Play, Pause, RotateCcw, Download, Loader2, VolumeX, Mic, Type, Video, C
 const generationStore = useGenerationStore()
 const { stage, isGenerating } = storeToRefs(generationStore)
 const toastStore = useToastStore()
-const { draft, generatedResult, subtitleSegments, hasTimestamps, isLoadingSubtitles, isLoadingFromHistory } = storeToRefs(generationStore)
+const { draft, generatedResult, subtitleSegments, hasTimestamps, isLoadingSubtitles, isLoadingFromHistory, shouldAutoPlay } = storeToRefs(generationStore)
 
 // FFmpeg for subtitle burning
 const ffmpeg = useFFmpeg()
 
 const aspectRatioClass = computed(() => {
   return draft.value.aspectRatio === 'portrait' ? 'aspect-[9/16]' : 'aspect-video'
+})
+
+// 計算旋轉後的縮放比例（90° 或 270° 時需要放大讓短邊填滿，無黑邊）
+const rotationTransform = computed(() => {
+  const rotation = draft.value.avatarRotation || 0
+  const normalizedRotation = ((rotation % 360) + 360) % 360
+
+  // 旋轉 90° 或 270° 時，使用對角線比例確保完全覆蓋
+  // 對於 9:16 容器，對角線/短邊 ≈ 2.04
+  if (normalizedRotation === 90 || normalizedRotation === 270) {
+    const aspectRatio = 16 / 9
+    const scale = Math.sqrt(1 + aspectRatio * aspectRatio) // ≈ 2.04
+    return `rotate(${rotation}deg) scale(${scale})`
+  }
+
+  return `rotate(${rotation}deg)`
 })
 
 // 標題拖曳 - 無限制
@@ -122,6 +138,8 @@ const isMuted = ref(false)
 async function tryAutoPlay(media: HTMLMediaElement) {
   try {
     await media.play()
+    isPlaying.value = true
+    console.log('Auto-play started successfully')
   } catch (err) {
     // Autoplay blocked, try muted
     console.warn('Autoplay blocked, trying muted:', err)
@@ -129,6 +147,8 @@ async function tryAutoPlay(media: HTMLMediaElement) {
     isMuted.value = true
     try {
       await media.play()
+      isPlaying.value = true
+      console.log('Auto-play started (muted)')
     } catch (mutedErr) {
       console.warn('Even muted autoplay failed:', mutedErr)
     }
@@ -143,9 +163,6 @@ function handleUnmute() {
     isMuted.value = false
   }
 }
-
-// Track if we should auto-play after loading
-const shouldAutoPlayAfterLoad = ref(false)
 
 // Track pending auto-play (waiting for Whisper to complete)
 const pendingAutoPlay = ref<HTMLMediaElement | null>(null)
@@ -217,7 +234,7 @@ watch(
   }
 )
 
-// Watch for new media - prepare for auto-play but don't play yet if loading from history
+// Watch for new media - reset playback state
 watch(
   () => generatedResult.value,
   async (newResult, oldResult) => {
@@ -230,27 +247,10 @@ watch(
       const media = newResult?.videoUrl ? videoRef.value : audioRef.value
 
       if (media) {
-        // Reset state
+        // Reset playback state
         currentTime.value = 0
         isMuted.value = false
         media.muted = false
-
-        // 如果正在從歷史載入，等待 loading 消失後再播放
-        if (isLoadingFromHistory.value) {
-          shouldAutoPlayAfterLoad.value = true
-        } else {
-          // 不是從歷史載入，直接播放
-          const playWhenReady = async () => {
-            await tryAutoPlay(media)
-            media.removeEventListener('canplay', playWhenReady)
-          }
-
-          if (media.readyState >= 3) {
-            await tryAutoPlay(media)
-          } else {
-            media.addEventListener('canplay', playWhenReady)
-          }
-        }
       }
     }
   }
@@ -326,24 +326,22 @@ async function onLoadedMetadata(event: Event) {
   const media = event.target as HTMLMediaElement
   duration.value = media.duration
 
-  // 媒體載入完成，清除歷史載入狀態
+  // 清除歷史載入狀態
   if (isLoadingFromHistory.value) {
     generationStore.clearHistoryLoading()
+  }
 
-    // 如果需要在 loading 消失後自動播放
-    if (shouldAutoPlayAfterLoad.value) {
-      shouldAutoPlayAfterLoad.value = false
+  // 處理自動播放（統一處理歷史載入和新生成）
+  if (shouldAutoPlay.value) {
+    generationStore.clearAutoPlay()
 
-      // 等待字幕載入完成（Whisper）後才播放
-      // 這樣才能確保字幕時間戳準確
-      if (isLoadingSubtitles.value) {
-        console.log('Media ready, waiting for Whisper to complete before auto-play')
-        pendingAutoPlay.value = media
-      } else {
-        // 字幕已經載入完成，直接播放
-        await nextTick()
-        await tryAutoPlay(media)
-      }
+    if (isLoadingSubtitles.value) {
+      console.log('Media ready, waiting for subtitles to complete before auto-play')
+      pendingAutoPlay.value = media
+    } else {
+      console.log('Media ready, subtitles complete, starting auto-play')
+      await nextTick()
+      await tryAutoPlay(media)
     }
   }
 }
@@ -363,6 +361,7 @@ function onPause() {
 
 function onEnded() {
   isPlaying.value = false
+  currentTime.value = duration.value
 }
 
 // Format time display
@@ -698,6 +697,7 @@ const formattedRemainingTime = computed(() => {
           :src="draft.avatarPreview"
           alt="Avatar preview"
           class="w-full h-full object-cover"
+          :style="{ transform: rotationTransform }"
         />
 
         <!-- Audio indicator -->
@@ -794,6 +794,7 @@ const formattedRemainingTime = computed(() => {
           :src="draft.avatarPreview"
           alt="Avatar preview"
           class="w-full h-full object-cover"
+          :style="{ transform: rotationTransform }"
         />
 
         <!-- Title Overlay - Draggable -->
@@ -873,7 +874,7 @@ const formattedRemainingTime = computed(() => {
 
       <!-- Loading from History Overlay -->
       <div
-        v-if="isLoadingFromHistory"
+        v-if="isLoadingFromHistory && !isLoadingSubtitles"
         class="absolute inset-0 bg-black/60 flex items-center justify-center z-30"
       >
         <div class="flex flex-col items-center gap-3">
@@ -980,3 +981,45 @@ const formattedRemainingTime = computed(() => {
 
   </div>
 </template>
+
+<style scoped>
+/* Range input 進度條樣式 - 讓 thumb 可以到達邊緣 */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #a855f7;
+  border-radius: 50%;
+  margin-top: -4px;
+  cursor: pointer;
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #a855f7;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+</style>

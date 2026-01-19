@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SavedImage, AspectRatio, DbImage } from "~/types";
-import { CirclePlus } from "lucide-vue-next";
+import { CirclePlus, RotateCcw } from "lucide-vue-next";
 
 const generationStore = useGenerationStore();
 const authStore = useAuthStore();
@@ -408,6 +408,13 @@ function handleClearAvatar() {
   generationStore.setAvatar(null);
 }
 
+// 旋轉處理：每次左轉 90 度（使用負值確保動畫是逆時針）
+function handleRotate() {
+  const currentRotation = draft.value.avatarRotation || 0;
+  const newRotation = currentRotation - 90; // 左轉 90 度
+  generationStore.setAvatarRotation(newRotation);
+}
+
 const hasSavedImages = computed(() => savedImages.value.length > 0);
 const isPortrait = computed(() => selectedRatio.value === "portrait");
 
@@ -422,11 +429,11 @@ defineExpose({
     <div class="flex items-center justify-between mb-3">
       <label class="font-bold text-stone-800 text-sm">照片</label>
       <button
-        class="p-1 text-stone-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+        class="px-2 py-1 text-xs text-stone-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
         @click="handleClick"
         title="更換照片"
       >
-        <CirclePlus class="w-5 h-5" />
+        更換
       </button>
     </div>
 
@@ -448,14 +455,23 @@ defineExpose({
       <img
         :src="draft.avatarPreview"
         alt="Avatar preview"
-        class="w-full h-full object-cover"
+        class="w-full h-full object-cover transition-transform duration-200"
+        :style="{ transform: `rotate(${draft.avatarRotation || 0}deg)` }"
       />
+      <!-- 旋轉按鈕 -->
+      <button
+        class="absolute top-2 left-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors z-10"
+        @click.stop="handleRotate"
+        title="左轉 90°"
+      >
+        <RotateCcw class="w-4 h-4" />
+      </button>
       <!-- Hover overlay -->
       <div
-        class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none"
       >
         <span
-          class="px-3 py-2 bg-white/90 hover:bg-white rounded-lg text-sm font-medium text-stone-800"
+          class="px-3 py-2 bg-white/90 rounded-lg text-sm font-medium text-stone-800"
         >
           更換
         </span>
@@ -805,29 +821,16 @@ defineExpose({
           <div class="flex-1 overflow-auto p-4">
             <!-- History Tab -->
             <div v-if="modalTab === 'history'">
+              <!-- Skeleton loading grid -->
               <div
                 v-if="isLoadingImages"
-                class="flex items-center justify-center py-12"
+                class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"
               >
-                <svg
-                  class="animate-spin w-8 h-8 text-purple-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <div
+                  v-for="i in 6"
+                  :key="i"
+                  class="animate-pulse aspect-square bg-stone-200 rounded-lg"
+                />
               </div>
               <div
                 v-else-if="savedImages.length === 0"

@@ -327,13 +327,14 @@ function parseAnalysisTitle(analysis: string): string | null {
       </div>
     </div>
 
-    <!-- Topic chips (horizontal scroll) -->
-    <div v-if="isLoadingTopics" class="flex items-center py-2">
-      <svg class="animate-spin w-4 h-4 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-      </svg>
-      <span class="text-xs text-stone-500">生成中...</span>
+    <!-- Topic chips (horizontal scroll) - Skeleton loading -->
+    <div v-if="isLoadingTopics" class="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4">
+      <div
+        v-for="i in 4"
+        :key="i"
+        class="animate-pulse h-6 bg-stone-200 rounded-full"
+        :style="{ width: `${60 + i * 10}px` }"
+      />
     </div>
 
     <div v-else class="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
@@ -454,12 +455,24 @@ function parseAnalysisTitle(analysis: string): string | null {
               </div>
             </div>
 
-            <!-- Loading state -->
-            <div v-else-if="isLoadingPersonas" class="flex items-center justify-center py-4">
-              <svg class="animate-spin w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+            <!-- Loading state - Skeleton cards -->
+            <div v-else-if="isLoadingPersonas" class="space-y-2">
+              <div
+                v-for="i in 3"
+                :key="i"
+                class="animate-pulse rounded-xl border-2 border-stone-200 p-3"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="h-4 w-32 bg-stone-200 rounded mb-2" />
+                    <div class="h-3 w-24 bg-stone-100 rounded" />
+                  </div>
+                  <div class="flex gap-1">
+                    <div class="h-6 w-6 bg-stone-200 rounded-lg" />
+                    <div class="h-6 w-6 bg-stone-200 rounded-lg" />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Divider -->

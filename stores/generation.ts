@@ -42,6 +42,7 @@ interface GenerationDraft {
   selectedImageId: number | null
   selectedVoiceId: number | null
   avatarPreview?: string
+  avatarRotation: number // 照片旋轉角度 (0, 90, 180, 270)
   voicePreview?: { name: string; speakerId?: string }
   aspectRatio: AspectRatio
   subtitleEnabled: boolean
@@ -60,6 +61,7 @@ const DEFAULT_DRAFT: GenerationDraft = {
   selectedImageId: null,
   selectedVoiceId: null,
   avatarPreview: undefined,
+  avatarRotation: 0,
   voicePreview: undefined,
   aspectRatio: 'portrait',
   subtitleEnabled: true,
@@ -89,6 +91,9 @@ export const useGenerationStore = defineStore('generation', () => {
 
   // History loading state
   const isLoadingFromHistory = ref(false)
+
+  // Auto-play flag (set when media should auto-play after loading)
+  const shouldAutoPlay = ref(false)
 
   // Debounced save
   let saveTimeout: ReturnType<typeof setTimeout> | null = null
@@ -142,6 +147,12 @@ export const useGenerationStore = defineStore('generation', () => {
   function setAvatar(imageId: number | null, preview?: string) {
     draft.value.selectedImageId = imageId
     draft.value.avatarPreview = preview
+    draft.value.avatarRotation = 0 // 切換照片時重置旋轉
+  }
+
+  // Set avatar rotation
+  function setAvatarRotation(rotation: number) {
+    draft.value.avatarRotation = rotation
   }
 
   // Start generation (stage management)
@@ -157,6 +168,7 @@ export const useGenerationStore = defineStore('generation', () => {
   // Set generation result
   function setResult(result: GenerationRecord) {
     generatedResult.value = result
+    shouldAutoPlay.value = true
   }
 
   // Set error
@@ -172,6 +184,7 @@ export const useGenerationStore = defineStore('generation', () => {
     subtitleSegments.value = []
     hasTimestamps.value = false
     isLoadingSubtitles.value = false
+    shouldAutoPlay.value = false
   }
 
   // Set subtitle segments
@@ -274,6 +287,7 @@ export const useGenerationStore = defineStore('generation', () => {
   async function loadFromHistory(item: GenerationRecord) {
     // 開始載入
     isLoadingFromHistory.value = true
+    shouldAutoPlay.value = true
 
     // 從 subtitleStyle 推斷字幕設定
     const subtitleConfig = migrateSubtitleStyle(item.subtitleStyle)
@@ -355,6 +369,7 @@ export const useGenerationStore = defineStore('generation', () => {
     clearDraft,
     setVoice,
     setAvatar,
+    setAvatarRotation,
 
     // Generation
     stage,
@@ -380,5 +395,9 @@ export const useGenerationStore = defineStore('generation', () => {
     loadFromHistory,
     isLoadingFromHistory,
     clearHistoryLoading,
+
+    // Auto-play
+    shouldAutoPlay,
+    clearAutoPlay: () => { shouldAutoPlay.value = false },
   }
 })

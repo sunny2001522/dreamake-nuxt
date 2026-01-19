@@ -629,6 +629,18 @@ const recordingProgress = computed(
   () => (recordingDuration.value / MAX_AUDIO_DURATION) * 100
 );
 
+// Selected voice preview computed properties
+const selectedVoiceId = computed(() => draft.value.voicePreview?.speakerId);
+const isGeneratingSelectedPreview = computed(
+  () =>
+    selectedVoiceId.value &&
+    generatingPreviewId.value === selectedVoiceId.value
+);
+const isPlayingSelectedPreview = computed(
+  () =>
+    selectedVoiceId.value && previewingVoiceId.value === selectedVoiceId.value
+);
+
 // Audio preview functions
 async function generateVoicePreview(voice: SavedVoice): Promise<string | null> {
   const voiceId = voice.supabaseId || String(voice.id);
@@ -714,6 +726,77 @@ function stopPreview() {
   previewingVoiceId.value = null;
 }
 
+// Preview selected voice (for the selected voice preview section)
+async function handlePreviewSelectedVoice(event: Event) {
+  event.stopPropagation();
+
+  const voicePreview = draft.value.voicePreview;
+  if (!voicePreview?.speakerId) return;
+
+  const voiceId = voicePreview.speakerId;
+
+  // 如果正在生成，忽略
+  if (generatingPreviewId.value === voiceId) return;
+
+  // 如果正在播放此語音，停止它
+  if (previewingVoiceId.value === voiceId) {
+    stopPreview();
+    return;
+  }
+
+  // 停止當前預覽
+  stopPreview();
+
+  // 顯示載入狀態
+  generatingPreviewId.value = voiceId;
+
+  try {
+    // 檢查快取
+    let audioUrl = previewCache.value.get(voiceId);
+
+    if (!audioUrl) {
+      // 調用 TTS API 生成預覽
+      const response = await $fetch("/api/voice/tts", {
+        method: "POST",
+        body: {
+          speakerId: voicePreview.speakerId,
+          transcript: "歡迎追蹤我",
+        },
+      });
+
+      if (response.success && response.audioUrl) {
+        previewCache.value.set(voiceId, response.audioUrl);
+        audioUrl = response.audioUrl;
+      }
+    }
+
+    if (!audioUrl) {
+      toastStore.error("生成預覽失敗");
+      return;
+    }
+
+    // 播放預覽
+    previewingVoiceId.value = voiceId;
+    previewAudio.value = new Audio(audioUrl);
+    previewAudio.value.play();
+
+    previewAudio.value.onended = () => {
+      previewingVoiceId.value = null;
+      previewAudio.value = null;
+    };
+
+    previewAudio.value.onerror = () => {
+      previewingVoiceId.value = null;
+      previewAudio.value = null;
+    };
+  } catch (error) {
+    console.error("Preview generation failed:", error);
+    toastStore.error("生成預覽失敗");
+  } finally {
+    generatingPreviewId.value = null;
+  }
+}
+
 // Clean up on unmount
 onUnmounted(() => {
   stopPreview();
@@ -728,11 +811,11 @@ onUnmounted(() => {
         <span class="text-xs text-stone-400 ml-2">上傳聲音讓 AI 學習模仿</span>
       </div>
       <button
-        class="p-1 text-stone-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+        class="px-2 py-1 text-xs text-stone-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
         @click="handleClick"
         title="更換語音"
       >
-        <CirclePlus class="w-5 h-5" />
+        更換
       </button>
     </div>
 
@@ -751,66 +834,55 @@ onUnmounted(() => {
       v-if="draft.voicePreview"
       class="flex items-center gap-3 p-3 bg-stone-100 rounded-xl"
     >
-      <div
-        class="w-10 h-10 bg-stone-700 rounded-full flex items-center justify-center"
+      <!-- 播放按鈕 -->
+      <button
+        class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+        :class="[
+          isGeneratingSelectedPreview
+            ? 'bg-stone-500 cursor-wait'
+            : isPlayingSelectedPreview
+            ? 'bg-stone-800 hover:bg-stone-900'
+            : 'bg-stone-700 hover:bg-stone-800',
+        ]"
+        :disabled="isGeneratingSelectedPreview"
+        @click="handlePreviewSelectedVoice($event)"
       >
-        <svg
-          class="w-5 h-5 text-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+        <!-- Loading spinner -->
+        <Loader2
+          v-if="isGeneratingSelectedPreview"
+          class="animate-spin w-4 h-4 text-white"
+        />
+        <!-- 音波動畫 -->
+        <div
+          v-else-if="isPlayingSelectedPreview"
+          class="flex items-center justify-center gap-0.5 w-4 h-4"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+          <div
+            v-for="i in 4"
+            :key="i"
+            class="w-0.5 bg-white rounded-full animate-audio-wave"
+            :style="{
+              height: `${8 + Math.sin((i - 1) * 0.8) * 4}px`,
+              animationDelay: `${(i - 1) * 100}ms`,
+            }"
           />
+        </div>
+        <!-- Play icon -->
+        <svg
+          v-else
+          class="w-4 h-4 text-white ml-0.5"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M8 5v14l11-7z" />
         </svg>
-      </div>
+      </button>
+
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-stone-800 truncate">
           {{ draft.voicePreview.name }}
         </p>
         <p class="text-xs text-stone-500">已選擇</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button
-          class="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
-          @click="handleClick"
-        >
-          <svg
-            class="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-        </button>
-        <button
-          class="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-          @click="handleClearVoice"
-        >
-          <svg
-            class="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
       </div>
     </div>
 
@@ -1087,11 +1159,19 @@ onUnmounted(() => {
                   歷史聲音
                 </h4>
 
-                <div
-                  v-if="isLoadingVoices"
-                  class="flex items-center justify-center py-8"
-                >
-                  <Loader2 class="animate-spin w-6 h-6 text-stone-400" />
+                <!-- Skeleton loading list -->
+                <div v-if="isLoadingVoices" class="space-y-2">
+                  <div
+                    v-for="i in 3"
+                    :key="i"
+                    class="animate-pulse flex items-center gap-3 p-3 bg-stone-50 rounded-xl"
+                  >
+                    <div class="w-10 h-10 bg-stone-200 rounded-full" />
+                    <div class="flex-1">
+                      <div class="h-4 w-24 bg-stone-200 rounded mb-2" />
+                      <div class="h-3 w-16 bg-stone-100 rounded" />
+                    </div>
+                  </div>
                 </div>
 
                 <div

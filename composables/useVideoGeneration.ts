@@ -4,6 +4,7 @@ interface GenerateVideoParams {
   transcript: string
   speakerId: string
   avatarUrl: string
+  avatarRotation?: number
   aspectRatio: 'portrait' | 'landscape'
   videoModel?: VideoModel
   waveSpeedPrompt?: string
@@ -64,6 +65,7 @@ export function useVideoGeneration() {
           transcript: params.transcript,
           speakerId: params.speakerId,
           avatarUrl: params.avatarUrl,
+          avatarRotation: params.avatarRotation || 0,
           aspectRatio: params.aspectRatio,
           videoModel: params.videoModel || 'vidnoz',
           waveSpeedPrompt: params.waveSpeedPrompt,

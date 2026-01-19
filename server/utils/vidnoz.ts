@@ -52,8 +52,7 @@ export async function generateTalkingVideo(
  */
 export async function generateTalkingVideoWithBuffer(
   avatarBuffer: Buffer,
-  audioBuffer: Buffer,
-  resolution: string = '720p'
+  audioBuffer: Buffer
 ): Promise<{ taskId: string }> {
   const url = `${VIDNOZ_API_BASE}/v2/task/generate-talking-head`
 
@@ -77,14 +76,12 @@ export async function generateTalkingVideoWithBuffer(
   formData.append('avatar', avatarBlob, 'avatar.jpg')
   formData.append('file', audioBlob, 'audio.wav') // Use 'file' parameter for direct audio upload
   formData.append('type', '2')
-  formData.append('resolution', resolution)
 
   console.log('Preparing FormData for Vidnoz with direct file uploads:', {
     avatarBlobSize: avatarBlob.size,
     audioBlobSize: audioBlob.size,
     type: '2',
-    resolution,
-  });
+  })
 
   const response = await fetch(url, {
     method: 'POST',

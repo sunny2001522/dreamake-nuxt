@@ -40,42 +40,23 @@ export function useMediaAnalysis() {
       error.value = null
       progress.value = { total: items.length, completed: 0 }
 
-      // 1. 調用後端 API 啟動分析
+      // 調用後端 API 啟動分析（後端會將任務存入數據庫）
       const response = await $fetch('/api/media/analyze', {
         method: 'POST',
-        body: { items },
+        body: { items, user_id: userId },
       })
 
-      const jobId = (response as any).job_id
+      const { job_id: jobId, pending_id: pendingId, pending_data } = response as any
 
-      // 2. 將任務存入數據庫
-      const supabase = useSupabaseClient<any>()
-      const { data: pendingData, error: insertError } = await supabase
-        .from('pending_analyses')
-        .insert({
-          user_id: userId,
-          job_id: jobId,
-          source_urls: items.map(i => i.url),
-          platforms: items.map(i => i.platform),
-          status: 'pending',
-        })
-        .select()
-        .single()
-
-      if (insertError || !pendingData) {
-        console.error('[MediaAnalysis] Failed to save pending analysis:', insertError)
-        throw new Error('Failed to save analysis task')
-      }
-
-      // 3. 添加到全局 store（啟動背景輪詢）
+      // 添加到全局 store（啟動背景輪詢）
       const pendingAnalysis: PendingAnalysis = {
-        id: pendingData.id,
-        jobId: pendingData.job_id,
-        sourceUrls: pendingData.source_urls,
-        platforms: pendingData.platforms as MediaPlatform[],
+        id: pendingId,
+        jobId: jobId,
+        sourceUrls: pending_data.source_urls,
+        platforms: pending_data.platforms as MediaPlatform[],
         status: 'pending',
-        createdAt: new Date(pendingData.created_at),
-        updatedAt: new Date(pendingData.updated_at),
+        createdAt: new Date(pending_data.created_at),
+        updatedAt: new Date(pending_data.updated_at),
         pollCount: 0,
       }
 
@@ -84,7 +65,7 @@ export function useMediaAnalysis() {
       // 分析已在背景進行，前端不需要等待
       isAnalyzing.value = false
 
-      return { jobId, pendingId: pendingData.id }
+      return { jobId, pendingId }
     }
     catch (err: any) {
       error.value = err.message || 'Failed to start analysis'

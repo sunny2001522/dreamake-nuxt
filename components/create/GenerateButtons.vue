@@ -253,6 +253,7 @@ async function handleGenerateVideo() {
       transcript: draft.value.transcript,
       speakerId,
       avatarUrl,
+      avatarRotation: draft.value.avatarRotation || 0,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
@@ -448,6 +449,7 @@ async function handleContinueToVideo() {
       transcript: draft.value.transcript,
       speakerId: existingResult.speakerId,
       avatarUrl: draft.value.avatarPreview,
+      avatarRotation: draft.value.avatarRotation || 0,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
@@ -637,14 +639,6 @@ async function handleContinueToVideo() {
         </button>
       </div>
     </div>
-
-    <!-- Disabled reason hint -->
-    <p
-      v-if="disabledReason && !isGenerating"
-      class="text-xs text-amber-600 text-center"
-    >
-      {{ disabledReason }}
-    </p>
 
     <!-- Show "Continue to video" if we have audio but no video -->
     <template v-if="generationStore.generatedResult?.audioUrl && !generationStore.generatedResult?.videoUrl">

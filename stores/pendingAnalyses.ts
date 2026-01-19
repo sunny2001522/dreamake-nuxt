@@ -68,9 +68,10 @@ export const usePendingAnalysesStore = defineStore('pendingAnalyses', () => {
   async function pollAllPending() {
     if (isPolling.value || !hasPending.value) return
 
-    // 獲取當前用戶 ID
-    const user = useSupabaseUser()
-    if (!user.value?.id) {
+    // 獲取當前用戶 ID (使用 OIDC authStore，非 Supabase)
+    const authStore = useAuthStore()
+    const userId = authStore.authInfo?.email || authStore.authInfo?.sub
+    if (!userId) {
       console.warn('[PendingAnalyses] No user logged in, skipping poll')
       return
     }
@@ -81,7 +82,7 @@ export const usePendingAnalysesStore = defineStore('pendingAnalyses', () => {
 
       const response = await $fetch<PollPendingResponse>('/api/media/poll-pending', {
         method: 'POST',
-        body: { user_id: user.value.id },
+        body: { user_id: userId },
       })
 
       // Handle completed analyses
@@ -151,6 +152,32 @@ export const usePendingAnalysesStore = defineStore('pendingAnalyses', () => {
     }
   }
 
+  // Cancel an analysis (call API and remove from store)
+  async function cancelAnalysis(jobId: string) {
+    const authStore = useAuthStore()
+    const userId = authStore.authInfo?.email || authStore.authInfo?.sub
+
+    if (!userId) {
+      console.warn('[PendingAnalyses] No user logged in, cannot cancel')
+      return
+    }
+
+    try {
+      await $fetch('/api/media/cancel', {
+        method: 'POST',
+        body: { job_id: jobId, user_id: userId },
+      })
+
+      // Remove from store
+      removeAnalysis(jobId)
+      toastStore.info('分析已取消')
+    }
+    catch (error: any) {
+      console.error('[PendingAnalyses] Cancel failed:', error)
+      toastStore.error('取消失敗', error.message || '請稍後再試')
+    }
+  }
+
   // Clear all and stop polling
   function clear() {
     stopPolling()
@@ -169,6 +196,7 @@ export const usePendingAnalysesStore = defineStore('pendingAnalyses', () => {
     addAnalysis,
     removeAnalysis,
     updateAnalysis,
+    cancelAnalysis,
     ensurePolling,
     stopPolling,
     pollAllPending,
