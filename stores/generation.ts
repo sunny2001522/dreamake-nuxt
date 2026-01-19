@@ -69,7 +69,7 @@ const DEFAULT_DRAFT: GenerationDraft = {
   subtitleBackground: 'black',
   titleY: 8, // 預設 8% 從頂部
   subtitleY: 66, // 預設 66% (約 2/3 處)
-  videoModel: 'vidnoz',
+  videoModel: 'wavespeed',
   waveSpeedPrompt: '對著鏡頭講話，侃侃而談，搭配手部動作，輕鬆而自然',
 }
 
@@ -292,6 +292,16 @@ export const useGenerationStore = defineStore('generation', () => {
     // 從 subtitleStyle 推斷字幕設定
     const subtitleConfig = migrateSubtitleStyle(item.subtitleStyle)
 
+    // FIX: 在設定 generatedResult 之前先設定 isLoadingSubtitles
+    // 這樣當 VideoPreview 的 onLoadedMetadata 觸發時，會正確等待字幕載入
+    // 避免競爭條件：影片快取時 onLoadedMetadata 可能在同一 tick 內觸發
+    const willLoadSubtitles = subtitleConfig.enabled && item.transcript && item.audioUrl
+    if (willLoadSubtitles) {
+      isLoadingSubtitles.value = true
+      subtitleSegments.value = []
+      hasTimestamps.value = false
+    }
+
     // Update draft with history item data
     draft.value = {
       ...draft.value,
@@ -312,15 +322,12 @@ export const useGenerationStore = defineStore('generation', () => {
     stage.value = 'complete'
     error.value = null
 
-    // 先設置 generatedResult
+    // 設置 generatedResult（觸發 VideoPreview 渲染）
     generatedResult.value = item
 
-    // 直接呼叫 Whisper API，不依賴 watch
-    if (subtitleConfig.enabled && item.transcript && item.audioUrl) {
-      isLoadingSubtitles.value = true
-      subtitleSegments.value = []
-      hasTimestamps.value = false
-      console.log('[Subtitle] Calling Whisper API for:', item.audioUrl.substring(0, 60))
+    // 呼叫 Whisper API
+    if (willLoadSubtitles) {
+      console.log('[Subtitle] Calling Whisper API for:', item.audioUrl!.substring(0, 60))
 
       try {
         const result = await $fetch('/api/subtitle', {

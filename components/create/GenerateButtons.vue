@@ -156,6 +156,20 @@ const disabledReason = computed(() => {
   return null
 })
 
+// Hover toast debounce
+const lastToastTime = ref(0)
+const TOAST_DEBOUNCE = 3000
+
+function handleGenerateHover() {
+  if (!canGenerate.value && disabledReason.value) {
+    const now = Date.now()
+    if (now - lastToastTime.value > TOAST_DEBOUNCE) {
+      toastStore.warning(disabledReason.value)
+      lastToastTime.value = now
+    }
+  }
+}
+
 // Voice-only generation
 async function handleGenerateVoiceOnly() {
   if (!canGenerate.value) {
@@ -624,8 +638,8 @@ async function handleContinueToVideo() {
         </button>
       </div>
 
-      <!-- Video Model Toggle -->
-      <div class="flex-1 flex bg-stone-100 rounded-lg p-0.5">
+      <!-- Video Model Toggle (已隱藏，直接使用高品質) -->
+      <div v-if="false" class="flex-1 flex bg-stone-100 rounded-lg p-0.5">
         <button
           v-for="option in videoModelOptions"
           :key="option.value"
@@ -646,6 +660,7 @@ async function handleContinueToVideo() {
         class="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         :disabled="isGenerating || !draft.avatarPreview"
         @click="handleContinueToVideo"
+        @mouseenter="handleGenerateHover"
       >
         <svg v-if="isGenerating" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -665,6 +680,7 @@ async function handleContinueToVideo() {
         class="flex-1 px-3 py-2 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
         :disabled="!canGenerate"
         @click="handleGenerateVoiceOnly"
+        @mouseenter="handleGenerateHover"
       >
         <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -684,6 +700,7 @@ async function handleContinueToVideo() {
         class="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
         :disabled="!canGenerate"
         @click="handleGenerateVideo"
+        @mouseenter="handleGenerateHover"
       >
         <svg v-if="isGenerating" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

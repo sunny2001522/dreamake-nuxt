@@ -3,6 +3,7 @@ import { ImageIcon, Music, Smartphone, Monitor, Settings, Volume2, Video } from 
 import type { AspectRatio } from '~/types'
 
 const generationStore = useGenerationStore()
+const toastStore = useToastStore()
 const { draft, isGenerating } = storeToRefs(generationStore)
 
 // Emit events for parent to handle
@@ -29,6 +30,29 @@ const canGenerate = computed(() => {
     !isGenerating.value
   )
 })
+
+// Error messages for disabled state
+const disabledReason = computed(() => {
+  if (isGenerating.value) return '正在生成中...'
+  if (!draft.value.transcript.trim()) return '請先輸入腳本內容'
+  if (!draft.value.avatarPreview) return '請先選擇頭像'
+  if (!draft.value.voicePreview?.speakerId) return '請先選擇語音'
+  return null
+})
+
+// Touch toast debounce
+const lastToastTime = ref(0)
+const TOAST_DEBOUNCE = 3000
+
+function handleGenerateTouch() {
+  if (!canGenerate.value && disabledReason.value) {
+    const now = Date.now()
+    if (now - lastToastTime.value > TOAST_DEBOUNCE) {
+      toastStore.warning(disabledReason.value)
+      lastToastTime.value = now
+    }
+  }
+}
 </script>
 
 <template>
@@ -80,6 +104,7 @@ const canGenerate = computed(() => {
           :class="canGenerate ? 'bg-stone-200 text-stone-700 hover:bg-stone-300' : 'bg-stone-100 text-stone-400'"
           :disabled="!canGenerate"
           @click="emit('generateVoice')"
+          @touchstart="handleGenerateTouch"
         >
           <Volume2 class="w-5 h-5" />
         </button>
@@ -90,6 +115,7 @@ const canGenerate = computed(() => {
           :class="canGenerate ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-stone-100 text-stone-400'"
           :disabled="!canGenerate"
           @click="emit('generateVideo')"
+          @touchstart="handleGenerateTouch"
         >
           <Video class="w-5 h-5" />
         </button>

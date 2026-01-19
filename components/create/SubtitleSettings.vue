@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-vue-next";
 import type { SubtitleFont, SubtitleBackground } from "~/types";
 
 const generationStore = useGenerationStore();
+const toastStore = useToastStore();
 const { draft } = storeToRefs(generationStore);
 
 const fonts: { value: SubtitleFont; label: string }[] = [
@@ -39,6 +40,10 @@ function toggleFontDropdown() {
 }
 
 function toggleBackgroundDropdown() {
+  if (!draft.value.title) {
+    toastStore.warning("請先輸入標題內容");
+    return;
+  }
   backgroundDropdownOpen.value = !backgroundDropdownOpen.value;
   fontDropdownOpen.value = false;
 }
@@ -110,8 +115,61 @@ const currentBackgroundLabel = computed(() => {
       class="flex flex-col sm:flex-row gap-2 transition-opacity"
       :class="draft.subtitleEnabled ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
-      <!-- Font Dropdown -->
+      <!-- Background Dropdown - 標題設定 -->
+      <div ref="backgroundDropdownRef" class="relative flex-1">
+        <label class="text-xs text-stone-500 mb-1 block">標題</label>
+        <button
+          type="button"
+          class="w-full flex items-center justify-between border text-sm rounded-lg py-2 px-3 transition-all"
+          :class="[
+            draft.title
+              ? 'bg-white border-stone-200 text-stone-700 cursor-pointer hover:border-stone-300'
+              : 'bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed',
+            backgroundDropdownOpen
+              ? 'ring-2 ring-stone-400/50 border-transparent bg-stone-50'
+              : ''
+          ]"
+          @click="toggleBackgroundDropdown"
+        >
+          <span class="whitespace-nowrap truncate">{{ currentBackgroundLabel }}</span>
+          <ChevronDown
+            class="w-4 h-4 text-stone-400 transition-transform"
+            :class="backgroundDropdownOpen ? 'rotate-180' : ''"
+          />
+        </button>
+        <Transition
+          enter-active-class="transition duration-150 ease-out"
+          enter-from-class="opacity-0 -translate-y-1"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-active-class="transition duration-100 ease-in"
+          leave-from-class="opacity-100 translate-y-0"
+          leave-to-class="opacity-0 -translate-y-1"
+        >
+          <div
+            v-if="backgroundDropdownOpen"
+            class="absolute z-10 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden"
+          >
+            <button
+              v-for="bg in backgrounds"
+              :key="bg.value"
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-stone-100 transition-colors"
+              :class="
+                draft.subtitleBackground === bg.value
+                  ? 'bg-stone-100 text-stone-800 font-medium'
+                  : 'text-stone-700'
+              "
+              @click="setBackground(bg.value)"
+            >
+              {{ bg.label }}
+            </button>
+          </div>
+        </Transition>
+      </div>
+
+      <!-- Font Dropdown - 字幕設定 -->
       <div ref="fontDropdownRef" class="relative flex-1">
+        <label class="text-xs text-stone-500 mb-1 block">字幕</label>
         <button
           type="button"
           class="w-full flex items-center justify-between bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 px-3 cursor-pointer hover:border-stone-300 transition-all"
@@ -153,54 +211,6 @@ const currentBackgroundLabel = computed(() => {
               @click="setFont(font.value)"
             >
               {{ font.label }}
-            </button>
-          </div>
-        </Transition>
-      </div>
-
-      <!-- Background Dropdown - 只在有標題時顯示 -->
-      <div v-if="draft.title" ref="backgroundDropdownRef" class="relative flex-1">
-        <button
-          type="button"
-          class="w-full flex items-center justify-between bg-white border border-stone-200 text-stone-700 text-sm rounded-lg py-2 px-3 cursor-pointer hover:border-stone-300 transition-all"
-          :class="
-            backgroundDropdownOpen
-              ? 'ring-2 ring-stone-400/50 border-transparent bg-stone-50'
-              : ''
-          "
-          @click="toggleBackgroundDropdown"
-        >
-          <span class="whitespace-nowrap truncate">{{ currentBackgroundLabel }}</span>
-          <ChevronDown
-            class="w-4 h-4 text-stone-400 transition-transform"
-            :class="backgroundDropdownOpen ? 'rotate-180' : ''"
-          />
-        </button>
-        <Transition
-          enter-active-class="transition duration-150 ease-out"
-          enter-from-class="opacity-0 -translate-y-1"
-          enter-to-class="opacity-100 translate-y-0"
-          leave-active-class="transition duration-100 ease-in"
-          leave-from-class="opacity-100 translate-y-0"
-          leave-to-class="opacity-0 -translate-y-1"
-        >
-          <div
-            v-if="backgroundDropdownOpen"
-            class="absolute z-10 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden"
-          >
-            <button
-              v-for="bg in backgrounds"
-              :key="bg.value"
-              type="button"
-              class="w-full text-left px-3 py-2 text-sm hover:bg-stone-100 transition-colors"
-              :class="
-                draft.subtitleBackground === bg.value
-                  ? 'bg-stone-100 text-stone-800 font-medium'
-                  : 'text-stone-700'
-              "
-              @click="setBackground(bg.value)"
-            >
-              {{ bg.label }}
             </button>
           </div>
         </Transition>

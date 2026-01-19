@@ -839,7 +839,7 @@ function handleTranscriptMicClick() {
           @click="showPersonaModal = true"
         >
           <Sparkles class="w-4 h-4" />
-          設定創作風格
+          定製腳本
         </button>
       </div>
     </div>

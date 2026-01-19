@@ -24,8 +24,8 @@ function setWaveSpeedPrompt(prompt: string) {
 
 <template>
   <div class="card p-4">
-    <!-- 影片品質選擇 -->
-    <div :class="{ 'mb-4': draft.videoModel === 'wavespeed' }">
+    <!-- 影片品質選擇 (已隱藏，直接使用高品質) -->
+    <div v-if="false" :class="{ 'mb-4': draft.videoModel === 'wavespeed' }">
       <div class="flex items-center justify-between mb-2">
         <label class="text-sm font-medium text-stone-700">影片品質</label>
         <!-- Token 每分鐘費率顯示 -->
@@ -67,8 +67,8 @@ function setWaveSpeedPrompt(prompt: string) {
       </div>
     </div>
 
-    <!-- 動作描述 (只在高品質時顯示) -->
-    <div v-if="draft.videoModel === 'wavespeed'">
+    <!-- 動作描述 (高品質功能，現在總是顯示) -->
+    <div>
       <label class="text-sm font-medium text-stone-700 mb-2 block">動作描述</label>
       <textarea
         :value="draft.waveSpeedPrompt"
