@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const { transcript } = await readBody(event)
+    const { transcript, persona_analysis } = await readBody(event)
 
     if (!transcript) {
       throw createError({
@@ -28,7 +28,11 @@ export default defineEventHandler(async (event) => {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const prompt = `根據以下逐字稿內容，生成一個適合放在短影片（如 TikTok、Reels、Shorts）頂部的吸睛標題。
+    const personaContext = persona_analysis
+      ? `\n\n創作者風格分析：\n${persona_analysis}\n\n請根據上述風格特徵，生成符合該創作者風格的標題。`
+      : ''
+
+    const prompt = `根據以下逐字稿內容，生成一個適合放在短影片（如 TikTok、Reels、Shorts）頂部的吸睛標題。${personaContext}
 
 規則：
 1. 標題分成兩行，用換行符號分隔

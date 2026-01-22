@@ -404,6 +404,7 @@ async function handleGenerateTitle() {
   try {
     const title = await transcriptGeneration.generateTitle(
       draft.value.transcript,
+      analysisResult.value || props.personaContent,
     );
     generationStore.updateDraft({ title });
     toastStore.success("標題生成完成！");

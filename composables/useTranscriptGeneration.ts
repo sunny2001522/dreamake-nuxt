@@ -52,11 +52,11 @@ export function useTranscriptGeneration() {
     }
   }
 
-  async function generateTitle(transcript: string): Promise<string> {
+  async function generateTitle(transcript: string, personaAnalysis?: string): Promise<string> {
     try {
       const response = await $fetch('/api/title', {
         method: 'POST',
-        body: { transcript },
+        body: { transcript, persona_analysis: personaAnalysis },
       })
 
       return (response as any).title
