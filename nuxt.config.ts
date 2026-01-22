@@ -77,13 +77,7 @@ export default defineNuxtConfig({
       oidcDomain: '',
       identityServiceDomain: '',
       profileServiceDomain: '',
-      // Fanbar 結帳 URL
-      // 測試機: https://test.cmoney.tw/cashflow/checkout
-      // 正式機: https://www.cmoney.tw/cashflow/checkout
       fanbarCheckoutUrl: process.env.NUXT_PUBLIC_FANBAR_CHECKOUT_URL || 'https://test.cmoney.tw/cashflow/checkout',
-      // Fanbar functionId
-      // 測試機: 12137
-      // 正式機: 12521
       fanbarFunctionId: process.env.NUXT_PUBLIC_FANBAR_FUNCTION_ID || '12137',
     },
   },
