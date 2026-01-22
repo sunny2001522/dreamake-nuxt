@@ -446,15 +446,6 @@ async function handleSelectTopic(topic: SuggestedTopic) {
   }
 }
 
-// Handle Enter key in textarea: Shift+Enter = newline, Enter = submit
-function handleEnterKey(event: KeyboardEvent) {
-  if (!event.shiftKey) {
-    event.preventDefault();
-    handleAnalyzeMedia();
-  }
-  // Shift+Enter: allow default behavior (newline)
-}
-
 async function handleAnalyzeMedia() {
   // 如果是純文字輸入，使用 saveTextPersona
   if (!urlValidation.value.isUrl) {
@@ -989,7 +980,7 @@ function handleTranscriptMicClick() {
           <div
             class="px-4 py-3 border-b border-stone-200 flex items-center justify-between"
           >
-            <h3 class="font-bold text-stone-800">讓 AI 學習你的風格</h3>
+            <h3 class="font-bold text-stone-800">讓 AI 學習你的人格與記憶</h3>
             <button
               class="p-1.5 hover:bg-stone-100 rounded-lg transition-colors"
               @click="showPersonaModal = false"
@@ -1088,14 +1079,13 @@ function handleTranscriptMicClick() {
             <!-- 新增風格 section (moved above saved personas) -->
             <div>
               <label class="block text-sm font-medium text-stone-700 mb-2"
-                >新增風格</label
+                >新增人格與記憶</label
               >
               <textarea
                 v-model="mediaUrl"
                 rows="2"
                 placeholder="貼上社群連結或輸入設定，AI 會學習你的說話方式、用詞習慣，幫你寫出符合你風格的腳本"
                 class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 border-stone-300 focus:border-purple-500 resize-none"
-                @keydown.enter="handleEnterKey"
               />
 
               <!-- Supported platforms with logos -->
@@ -1158,13 +1148,14 @@ function handleTranscriptMicClick() {
                   </div>
                 </div>
               </div>
-              <!-- 開始分析 button directly below input -->
+              <!-- 開始分析/新增人格設定 button directly below input -->
               <button
                 class="w-full mt-3 px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 :disabled="!mediaUrl.trim()"
                 @click="handleAnalyzeMedia"
               >
                 <svg
+                  v-if="urlValidation.isUrl"
                   class="w-4 h-4"
                   fill="none"
                   viewBox="0 0 24 24"
@@ -1177,8 +1168,8 @@ function handleTranscriptMicClick() {
                     d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                   />
                 </svg>
-                <span>開始分析</span>
-                <span class="flex items-center gap-0.5 text-white/80">
+                <span>{{ urlValidation.isUrl ? '開始分析' : '新增人格設定' }}</span>
+                <span v-if="urlValidation.isUrl" class="flex items-center gap-0.5 text-white/80">
                   <Gem class="w-3 h-3" />{{ ANALYSIS_TOKEN_COST }}
                 </span>
               </button>
