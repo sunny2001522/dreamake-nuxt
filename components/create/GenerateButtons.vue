@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GenerationRecord, AspectRatio, VideoModel } from '~/types'
-import { Smartphone, Monitor, Gem } from 'lucide-vue-next'
+import { Smartphone, Monitor, Gem, Layers } from 'lucide-vue-next'
 import {
   VIDEO_TOKEN_COSTS,
   calculateVideoTokenCost,
@@ -12,11 +12,15 @@ import {
 const VIDEO_BASE_TOKEN = 2
 
 const generationStore = useGenerationStore()
+const segmentedStore = useSegmentedGenerationStore()
 const authStore = useAuthStore()
 const toastStore = useToastStore()
 const subscriptionStore = useSubscriptionStore()
 const router = useRouter()
 const { track } = useEventTracker()
+
+// 分段生成模式
+const isSegmentedMode = defineModel<boolean>('segmentedMode', { default: false })
 
 const { draft, isGenerating, stage } = storeToRefs(generationStore)
 
@@ -230,6 +234,62 @@ async function handleGenerateVoiceOnly() {
     generationStore.setError(err.message || '語音生成失敗')
     generationStore.setStage('idle')
     toastStore.error('語音生成失敗', err.message)
+  }
+}
+
+// Segmented video generation
+async function handleSegmentedGeneration() {
+  if (!canGenerate.value) {
+    toastStore.warning(disabledReason.value || '請先填寫腳本、選擇頭像和語音')
+    return
+  }
+
+  // Check auth
+  if (!authStore.user) {
+    toastStore.error('請先登入帳號以使用生成功能')
+    const { $manager } = useNuxtApp()
+    await authStore.login($manager as any, '/create')
+    return
+  }
+
+  // Validate avatar URL
+  if (!draft.value.avatarPreview) {
+    toastStore.error('請上傳頭像照片以生成影片')
+    return
+  }
+
+  try {
+    generationStore.resetGeneration()
+    generationStore.setStage('voice')
+
+    const speakerId = draft.value.voicePreview!.speakerId!
+    const avatarUrl = draft.value.avatarPreview
+    const userId = authStore.authInfo.email || authStore.authInfo.sub
+
+    // 開始分段生成
+    toastStore.info('開始分段生成，請稍候...')
+
+    await segmentedStore.startSegmentedGeneration({
+      transcript: draft.value.transcript,
+      speakerId,
+      avatarUrl,
+      aspectRatio: draft.value.aspectRatio,
+      videoModel: draft.value.videoModel,
+      waveSpeedPrompt: draft.value.waveSpeedPrompt,
+      waveSpeedResolution: draft.value.aspectRatio === 'portrait' ? '720x1280' : '1280x720',
+      userId,
+      avatarRotation: draft.value.avatarRotation || 0,
+      avatarPanX: draft.value.avatarPanX || 0,
+      avatarPanY: draft.value.avatarPanY || 0,
+    })
+
+    toastStore.success('分段生成已開始！')
+    generationStore.setStage('video')
+  } catch (err: any) {
+    console.error('Segmented generation failed:', err)
+    generationStore.setError(err.message || '分段生成失敗')
+    generationStore.setStage('error')
+    toastStore.error('分段生成失敗', err.message)
   }
 }
 
@@ -591,46 +651,64 @@ async function handleContinueToVideo() {
     </template>
 
     <!-- Normal generation buttons -->
-    <div v-else class="flex gap-2">
-      <!-- Voice only button -->
-      <button
-        class="flex-1 px-3 py-2 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-        :disabled="!canGenerate"
-        @click="handleGenerateVoiceOnly"
-        @mouseenter="handleGenerateHover"
-      >
-        <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-        <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-        </svg>
-        語音
-        <span v-if="!isGenerating" class="flex items-center gap-0.5 text-stone-500">
-          <Gem class="w-3 h-3" />{{ estimatedVoiceTokenCost }}
-        </span>
-      </button>
+    <div v-else class="space-y-2">
+      <!-- 分段生成開關 -->
+      <div class="flex items-center justify-between px-1">
+        <button
+          class="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 transition-colors"
+          @click="isSegmentedMode = !isSegmentedMode"
+        >
+          <Layers class="w-3.5 h-3.5" />
+          <span>分段生成</span>
+          <span v-if="isSegmentedMode" class="text-purple-500">(已開啟)</span>
+        </button>
+        <div v-if="isSegmentedMode" class="text-[10px] text-stone-400">
+          適合長文本，可單獨重新生成每段
+        </div>
+      </div>
 
-      <!-- Full video button -->
-      <button
-        class="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-        :disabled="!canGenerate"
-        @click="handleGenerateVideo"
-        @mouseenter="handleGenerateHover"
-      >
-        <svg v-if="isGenerating" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-        <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        影片
-        <span v-if="!isGenerating" class="flex items-center gap-0.5 text-white/80">
-          <Gem class="w-3 h-3" />{{ estimatedVideoTokenCost }}
-        </span>
-      </button>
+      <div class="flex gap-2">
+        <!-- Voice only button -->
+        <button
+          class="flex-1 px-3 py-2 bg-stone-100 text-stone-700 font-medium rounded-xl hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+          :disabled="!canGenerate"
+          @click="handleGenerateVoiceOnly"
+          @mouseenter="handleGenerateHover"
+        >
+          <svg v-if="isGenerating && stage === 'voice'" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+          語音
+          <span v-if="!isGenerating" class="flex items-center gap-0.5 text-stone-500">
+            <Gem class="w-3 h-3" />{{ estimatedVoiceTokenCost }}
+          </span>
+        </button>
+
+        <!-- Full video button (or segmented) -->
+        <button
+          class="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+          :disabled="!canGenerate"
+          @click="isSegmentedMode ? handleSegmentedGeneration() : handleGenerateVideo()"
+          @mouseenter="handleGenerateHover"
+        >
+          <svg v-if="isGenerating || segmentedStore.isGenerating" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <Layers v-else-if="isSegmentedMode" class="w-4 h-4" />
+          <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          {{ isSegmentedMode ? '分段影片' : '影片' }}
+          <span v-if="!isGenerating && !segmentedStore.isGenerating" class="flex items-center gap-0.5 text-white/80">
+            <Gem class="w-3 h-3" />{{ estimatedVideoTokenCost }}
+          </span>
+        </button>
+      </div>
     </div>
   </div>
 </template>

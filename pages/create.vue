@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { GenerationRecord } from "~/types";
+import type { GenerationRecord, RegenerateType, TimelineTracks } from "~/types";
 
 definePageMeta({
   layout: "default",
@@ -8,10 +8,129 @@ definePageMeta({
 
 const authStore = useAuthStore();
 const generationStore = useGenerationStore();
+const { track } = useEventTracker();
+const segmentedStore = useSegmentedGenerationStore();
 const preferencesStore = usePreferencesStore();
 const subscriptionStore = useSubscriptionStore();
 const toastStore = useToastStore();
 const router = useRouter();
+
+// 分段生成模式
+const isSegmentedMode = ref(false);
+
+// ============================================
+// 時間軸整合 (一般模式 + 分段模式共用)
+// ============================================
+
+const { generatedResult, subtitleSegments } = storeToRefs(generationStore);
+
+// 一般模式的播放狀態（由 VideoPreview 控制，這裡用於時間軸同步）
+const normalModeCurrentTime = ref(0);
+const normalModeDuration = ref(0);
+const normalModeIsPlaying = ref(false);
+
+// 是否使用分段模式的時間軸資料
+const useSegmentedTimeline = computed(() =>
+  isSegmentedMode.value ||
+  segmentedStore.isGenerating ||
+  segmentedStore.completedSegments.length > 0
+);
+
+// 是否顯示時間軸 (永遠顯示)
+const showTimeline = computed(() => true);
+
+// 時間軸軌道資料
+const timelineTracks = computed<TimelineTracks>(() => {
+  if (useSegmentedTimeline.value) {
+    return segmentedStore.timelineTracks;
+  }
+
+  // 一般模式：生成單一軌道
+  const result = generatedResult.value;
+  if (!result) {
+    return { video: [], audio: [], subtitle: [] };
+  }
+
+  const duration = normalModeDuration.value || 1;
+
+  return {
+    video: result.videoUrl
+      ? [{ segmentId: "main", segmentIndex: 0, startTime: 0, endTime: duration, content: result.videoUrl }]
+      : [],
+    audio: result.audioUrl
+      ? [{ segmentId: "main", segmentIndex: 0, startTime: 0, endTime: duration, content: result.audioUrl }]
+      : [],
+    subtitle: subtitleSegments.value.map((sub, idx) => ({
+      segmentId: `sub-${idx}`,
+      segmentIndex: 0,
+      startTime: sub.startTime >= 0 ? sub.startTime : (idx / subtitleSegments.value.length) * duration,
+      endTime: sub.endTime >= 0 ? sub.endTime : ((idx + 1) / subtitleSegments.value.length) * duration,
+      content: sub.text,
+    })),
+  };
+});
+
+// 時間軸時長
+const timelineDuration = computed(() =>
+  useSegmentedTimeline.value ? segmentedStore.totalDuration : normalModeDuration.value
+);
+
+// 時間軸當前時間
+const timelineCurrentTime = computed(() =>
+  useSegmentedTimeline.value ? segmentedStore.globalCurrentTime : normalModeCurrentTime.value
+);
+
+// 時間軸播放狀態
+const timelineIsPlaying = computed(() =>
+  useSegmentedTimeline.value ? segmentedStore.isPlaying : normalModeIsPlaying.value
+);
+
+// 時間軸事件處理
+function handleTimelineSeek(time: number) {
+  if (useSegmentedTimeline.value) {
+    // 分段模式的 seek 由 SegmentedVideoPreview 內部處理
+    segmentedStore.setGlobalTime(time);
+  } else {
+    // 一般模式：需要通知 VideoPreview
+    normalModeCurrentTime.value = time;
+    // 透過 provide/inject 或事件通知 VideoPreview
+  }
+}
+
+function handleTimelinePlay() {
+  if (useSegmentedTimeline.value) {
+    segmentedStore.setPlaying(true);
+  } else {
+    normalModeIsPlaying.value = true;
+  }
+}
+
+function handleTimelinePause() {
+  if (useSegmentedTimeline.value) {
+    segmentedStore.setPlaying(false);
+  } else {
+    normalModeIsPlaying.value = false;
+  }
+}
+
+async function handleTimelineRegenerate(segmentIndex: number, type: RegenerateType) {
+  if (!useSegmentedTimeline.value) return;
+
+  try {
+    toastStore.info(`重新生成段落 ${segmentIndex + 1}...`);
+    await segmentedStore.regenerateSegment(segmentIndex, type);
+    toastStore.success(`段落 ${segmentIndex + 1} 已開始重新生成`);
+  } catch (error: any) {
+    toastStore.error(error.message || "重新生成失敗");
+  }
+}
+
+// 提供給子組件同步播放狀態
+provide("normalModePlayback", {
+  currentTime: normalModeCurrentTime,
+  duration: normalModeDuration,
+  isPlaying: normalModeIsPlaying,
+});
 
 // Token 相關
 const showUpgradeModal = ref(false);
@@ -87,6 +206,9 @@ function handlePersonaUpdate(content: string) {
 
 // Load user data on mount
 onMounted(async () => {
+  // 埋點：頁面瀏覽
+  track('page_view_create');
+
   if (authStore.user) {
     // Use CMoney email as user identifier for data association
     const userId = authStore.authInfo.email || authStore.authInfo.sub;
@@ -379,29 +501,55 @@ async function handleGenerateVideo() {
       <!-- Preview Area (Flexible) -->
       <div
         ref="previewRef"
-        class="relative flex-1 min-h-0 flex items-center justify-center"
+        class="relative flex-1 min-h-0 flex flex-col"
       >
-        <CreateVideoPreview class="w-full h-full" />
-        <!-- History button -->
-        <NuxtLink
-          to="/history"
-          class="absolute top-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm"
-        >
-          <svg
-            class="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </NuxtLink>
+        <!-- 影片預覽 -->
+        <div class="flex-1 min-h-0 flex items-center justify-center">
+          <!-- 分段生成預覽 -->
+          <CreateSegmentedVideoPreview
+            v-if="isSegmentedMode || segmentedStore.isGenerating || segmentedStore.completedSegments.length > 0"
+            class="w-full h-full"
+            :show-timeline="false"
+          />
+          <!-- 一般預覽 -->
+          <CreateVideoPreview v-else class="w-full h-full" />
+        </div>
+
+        <!-- 移動版時間軸 -->
+        <div v-if="showTimeline" class="flex-shrink-0 mt-2">
+          <Timeline
+            :tracks="timelineTracks"
+            :duration="timelineDuration"
+            :current-time="timelineCurrentTime"
+            :is-playing="timelineIsPlaying"
+            :segments="segmentedStore.segments"
+            @seek="handleTimelineSeek"
+            @play="handleTimelinePlay"
+            @pause="handleTimelinePause"
+            @regenerate="handleTimelineRegenerate"
+          />
+        </div>
       </div>
+
+      <!-- History button (移到預覽區外面，使用 fixed 定位) -->
+      <NuxtLink
+        to="/history"
+        class="fixed top-20 right-4 flex items-center gap-1 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm z-10"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      </NuxtLink>
 
       <!-- Topic Suggestions -->
       <CreateMobileTopicSuggestions
@@ -489,7 +637,7 @@ async function handleGenerateVideo() {
           />
 
           <!-- Generate Buttons with inline settings -->
-          <CreateGenerateButtons />
+          <CreateGenerateButtons v-model:segmented-mode="isSegmentedMode" />
 
           <!-- Generating Overlay -->
           <div
@@ -504,21 +652,34 @@ async function handleGenerateVideo() {
           </div>
         </div>
 
-        <!-- Right Column: Preview -->
+        <!-- Right Column: Preview + Timeline -->
         <div class="h-full flex flex-col min-h-0">
           <!-- Video Preview -->
           <div class="relative flex-1 min-h-0 flex items-center justify-center">
-            <CreateVideoPreview />
-            <!-- Desktop History button -->
-            <!-- <button
-              @click="showHistorySidebar = true"
-              class="absolute top-2 right-2 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm text-stone-600 shadow-sm hover:bg-white hover:shadow-md transition-all"
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>歷史</span>
-            </button> -->
+            <!-- 分段生成預覽 (只有影片部分) -->
+            <CreateSegmentedVideoPreview
+              v-if="isSegmentedMode || segmentedStore.isGenerating || segmentedStore.completedSegments.length > 0"
+              class="w-full h-full"
+              :show-timeline="false"
+            />
+            <!-- 一般預覽 -->
+            <CreateVideoPreview v-else />
+          </div>
+
+          <!-- 時間軸 (永遠顯示) -->
+          <div class="flex-shrink-0">
+            <Timeline
+              v-if="showTimeline"
+              :tracks="timelineTracks"
+              :duration="timelineDuration"
+              :current-time="timelineCurrentTime"
+              :is-playing="timelineIsPlaying"
+              :segments="segmentedStore.segments"
+              @seek="handleTimelineSeek"
+              @play="handleTimelinePlay"
+              @pause="handleTimelinePause"
+              @regenerate="handleTimelineRegenerate"
+            />
           </div>
         </div>
       </div>

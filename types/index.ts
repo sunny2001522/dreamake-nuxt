@@ -370,3 +370,190 @@ export interface PollPendingResponse {
     errorMessage: string
   }>
 }
+
+// ============================================
+// Segmented Video Generation Types
+// ============================================
+
+/** 語意分段後的逐字稿段落 */
+export interface TranscriptSegment {
+  id: string
+  index: number
+  text: string
+}
+
+/** 分段生成狀態 */
+export type SegmentStatus = 'pending' | 'tts' | 'whisper' | 'video' | 'completed' | 'failed'
+
+/** 單一分段的生成結果 */
+export interface GeneratedSegment {
+  id: string
+  index: number
+  text: string
+  status: SegmentStatus
+  error?: string
+  retryCount?: number
+
+  // TTS 結果
+  audioUrl?: string
+  audioDuration?: number
+
+  // Whisper 結果
+  subtitles?: TimedSegment[]
+
+  // 影片結果
+  videoTaskId?: string
+  videoUrl?: string
+
+  // 時間軸位置 (用於串接播放)
+  globalStartTime?: number
+  globalEndTime?: number
+}
+
+/** 分段生成任務的整體狀態 */
+export type SegmentedJobStatus = 'segmenting' | 'generating' | 'completed' | 'failed'
+
+/** 分段生成任務 */
+export interface SegmentedJob {
+  id: string
+  userId: string
+  status: SegmentedJobStatus
+
+  // 原始輸入
+  transcript: string
+  speakerId: string
+  avatarUrl: string
+  aspectRatio: AspectRatio
+  videoModel: VideoModel
+  waveSpeedPrompt?: string
+  waveSpeedResolution?: WaveSpeedResolution
+
+  // 分段資料
+  segments: GeneratedSegment[]
+
+  // 統計
+  totalSegments: number
+  completedSegments: number
+  failedSegments: number
+
+  // 最終結果
+  totalDuration?: number
+
+  // 時間戳
+  createdAt: Date
+  updatedAt: Date
+  completedAt?: Date
+}
+
+/** 時間軸軌道類型 */
+export type TimelineTrackType = 'video' | 'audio' | 'subtitle'
+
+/** 時間軸軌道項目 */
+export interface TimelineTrackItem {
+  segmentId: string
+  segmentIndex: number
+  startTime: number
+  endTime: number
+  content: string // URL 或字幕文字
+}
+
+/** 時間軸軌道資料 */
+export interface TimelineTracks {
+  video: TimelineTrackItem[]
+  audio: TimelineTrackItem[]
+  subtitle: TimelineTrackItem[]
+}
+
+/** 重新生成類型 */
+export type RegenerateType = 'audio' | 'video' | 'both'
+
+// ============================================
+// Segmented Generation Database Types
+// ============================================
+
+export interface DbSegmentedJob {
+  id: string
+  user_id: string
+  status: SegmentedJobStatus
+  transcript: string
+  speaker_id: string
+  avatar_url: string
+  aspect_ratio: AspectRatio
+  video_model: VideoModel
+  wavespeed_prompt: string | null
+  wavespeed_resolution: WaveSpeedResolution | null
+  total_segments: number
+  completed_segments: number
+  failed_segments: number
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+export interface DbJobSegment {
+  id: string
+  job_id: string
+  index: number
+  text: string
+  status: SegmentStatus
+  audio_url: string | null
+  audio_duration: number | null
+  subtitles: TimedSegment[] | null
+  video_task_id: string | null
+  video_url: string | null
+  error: string | null
+  retry_count: number
+  created_at: string
+  updated_at: string
+}
+
+export type DbSegmentedJobInsert = Omit<DbSegmentedJob, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'completed_segments' | 'failed_segments'>
+export type DbJobSegmentInsert = Omit<DbJobSegment, 'id' | 'created_at' | 'updated_at' | 'retry_count' | 'audio_url' | 'audio_duration' | 'subtitles' | 'video_task_id' | 'video_url' | 'error'>
+
+// ============================================
+// Segmented Generation API Types
+// ============================================
+
+export interface SegmentedGenerationRequest {
+  transcript: string
+  speakerId: string
+  avatarUrl: string
+  aspectRatio: AspectRatio
+  videoModel?: VideoModel
+  waveSpeedPrompt?: string
+  waveSpeedResolution?: WaveSpeedResolution
+  userId?: string
+  avatarRotation?: number
+  avatarPanX?: number
+  avatarPanY?: number
+}
+
+export interface SegmentedGenerationResponse {
+  jobId: string
+  status: SegmentedJobStatus
+  segments: GeneratedSegment[]
+  totalSegments: number
+}
+
+export interface SegmentedJobProgressResponse {
+  jobId: string
+  status: SegmentedJobStatus
+  progress: {
+    total: number
+    completed: number
+    failed: number
+    processing: number
+  }
+  segments: GeneratedSegment[]
+  totalDuration?: number
+}
+
+export interface RegenerateSegmentRequest {
+  segmentIndex: number
+  type: RegenerateType
+}
+
+export interface RegenerateSegmentResponse {
+  success: boolean
+  segment: GeneratedSegment
+}
