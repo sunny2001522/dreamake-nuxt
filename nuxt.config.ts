@@ -79,6 +79,7 @@ export default defineNuxtConfig({
       profileServiceDomain: '',
       fanbarCheckoutUrl: process.env.NUXT_PUBLIC_FANBAR_CHECKOUT_URL || 'https://test.cmoney.tw/cashflow/checkout',
       fanbarFunctionId: process.env.NUXT_PUBLIC_FANBAR_FUNCTION_ID || '12137',
+      googleSheetsWebhook: process.env.NUXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK || '',
     },
   },
 

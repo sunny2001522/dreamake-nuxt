@@ -58,6 +58,8 @@ export default defineEventHandler(async (event) => {
       speakerId,
       avatarUrl,
       avatarRotation = 0,
+      avatarPanX = 0,
+      avatarPanY = 0,
       videoModel = 'vidnoz' as VideoModel,
       waveSpeedPrompt = DEFAULT_WAVESPEED_PROMPT,
       waveSpeedResolution = '720p' as WaveSpeedResolution,
@@ -130,12 +132,19 @@ export default defineEventHandler(async (event) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     console.log('Decoded TTS audio buffer, size:', audioBuffer.length, 'bytes')
 
-    // 2. Crop avatar image to target aspect ratio (with optional rotation)
-    console.log('Cropping avatar image to aspect ratio:', aspectRatio, 'rotation:', avatarRotation)
+    // 2. Crop avatar image to target aspect ratio (with optional rotation and pan)
+    console.log('Cropping avatar image:', {
+      aspectRatio,
+      rotation: avatarRotation,
+      panX: avatarPanX,
+      panY: avatarPanY,
+    })
     const croppedBuffer = await cropImageToAspectRatio({
       imageUrl: avatarUrl,
       aspectRatio: aspectRatio || 'portrait',
       rotation: avatarRotation,
+      panX: avatarPanX,
+      panY: avatarPanY,
     })
     console.log('Cropped avatar buffer size:', croppedBuffer.length, 'bytes')
 

@@ -16,6 +16,7 @@ const authStore = useAuthStore()
 const toastStore = useToastStore()
 const subscriptionStore = useSubscriptionStore()
 const router = useRouter()
+const { track } = useEventTracker()
 
 const { draft, isGenerating, stage } = storeToRefs(generationStore)
 
@@ -70,8 +71,7 @@ function setVideoModel(model: VideoModel) {
 
 // Generation composable
 const videoGeneration = useVideoGeneration()
-const { uploadVideoToStorage, uploadBlobToStorage, createVideo } = useVideoStorage()
-const ffmpeg = useFFmpeg()
+const { uploadVideoToStorage, createVideo } = useVideoStorage()
 
 // Subtitle generation helper
 async function generateSubtitles(audioUrl: string, transcript: string) {
@@ -235,6 +235,9 @@ async function handleGenerateVoiceOnly() {
 
 // Full video generation
 async function handleGenerateVideo() {
+  // 埋點：點擊生成影片
+  track('click_generate_video')
+
   if (!canGenerate.value) {
     toastStore.warning(disabledReason.value || '請先填寫腳本、選擇頭像和語音')
     return
@@ -268,6 +271,8 @@ async function handleGenerateVideo() {
       speakerId,
       avatarUrl,
       avatarRotation: draft.value.avatarRotation || 0,
+      avatarPanX: draft.value.avatarPanX || 0,
+      avatarPanY: draft.value.avatarPanY || 0,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
@@ -339,56 +344,11 @@ async function handleGenerateVideo() {
     // Use immediately invoked async function to properly handle errors
     ;(async () => {
       try {
-        // 1. Check if we should burn subtitles
-        const shouldBurnSubtitles =
-          draft.value.subtitleEnabled &&
-          generationStore.subtitleSegments.length > 0 &&
-          generationStore.hasTimestamps
+        // Upload original video (subtitles will be burned on download only)
+        const supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+        console.log('[Video Save] Original video uploaded:', supabaseVideoUrl)
 
-        let burnedBlob: Blob | null = null
-
-        // 2. If subtitles enabled, burn them first
-        if (shouldBurnSubtitles) {
-          console.log('[Video Save] Burning subtitles before upload...')
-          toastStore.info('正在燒錄字幕至影片...')
-
-          const isPortrait = draft.value.aspectRatio === 'portrait'
-          const videoWidth = isPortrait ? 1080 : 1920
-          const videoHeight = isPortrait ? 1920 : 1080
-
-          try {
-            burnedBlob = await ffmpeg.burnSubtitles({
-              videoUrl: videoResult.videoUrl,
-              segments: generationStore.subtitleSegments,
-              font: draft.value.subtitleFont,
-              titleBackground: draft.value.subtitleBackground,
-              subtitleY: draft.value.subtitleY,
-              videoWidth,
-              videoHeight,
-              title: draft.value.title || undefined,
-              titleY: draft.value.titleY,
-            })
-          } catch (burnErr) {
-            console.warn('[Video Save] Subtitle burning failed:', burnErr)
-            toastStore.warning('字幕燒錄失敗，將儲存無字幕版本')
-            burnedBlob = null
-          }
-        }
-
-        // 3. Upload video (burned or original)
-        let supabaseVideoUrl: string
-
-        if (burnedBlob) {
-          // Upload burned blob
-          supabaseVideoUrl = await uploadBlobToStorage(burnedBlob, userId)
-          console.log('[Video Save] Burned video uploaded:', supabaseVideoUrl)
-        } else {
-          // Upload original video URL
-          supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
-          console.log('[Video Save] Original video uploaded:', supabaseVideoUrl)
-        }
-
-        // 4. Save to database
+        // Save to database
         await createVideo({
           user_id: userId,
           transcript: draft.value.transcript,
@@ -404,7 +364,7 @@ async function handleGenerateVideo() {
           voice_preview: draft.value.voicePreview?.name || null,
         })
         console.log('[Video Save] Database record created')
-        toastStore.success(burnedBlob ? '帶字幕影片已儲存' : '影片已儲存（無字幕）')
+        toastStore.success('影片已儲存')
       } catch (uploadErr: any) {
         console.error('[Video Save] Upload failed:', uploadErr)
         toastStore.warning('雲端儲存失敗，嘗試使用臨時連結...')
@@ -464,6 +424,8 @@ async function handleContinueToVideo() {
       speakerId: existingResult.speakerId,
       avatarUrl: draft.value.avatarPreview,
       avatarRotation: draft.value.avatarRotation || 0,
+      avatarPanX: draft.value.avatarPanX || 0,
+      avatarPanY: draft.value.avatarPanY || 0,
       aspectRatio: draft.value.aspectRatio,
       videoModel: draft.value.videoModel,
       waveSpeedPrompt: draft.value.waveSpeedPrompt,
@@ -515,56 +477,11 @@ async function handleContinueToVideo() {
     // Use immediately invoked async function to properly handle errors
     ;(async () => {
       try {
-        // 1. Check if we should burn subtitles
-        const shouldBurnSubtitles =
-          draft.value.subtitleEnabled &&
-          generationStore.subtitleSegments.length > 0 &&
-          generationStore.hasTimestamps
+        // Upload original video (subtitles will be burned on download only)
+        const supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
+        console.log('[Video Save] Original video uploaded:', supabaseVideoUrl)
 
-        let burnedBlob: Blob | null = null
-
-        // 2. If subtitles enabled, burn them first
-        if (shouldBurnSubtitles) {
-          console.log('[Video Save] Burning subtitles before upload...')
-          toastStore.info('正在燒錄字幕至影片...')
-
-          const isPortrait = draft.value.aspectRatio === 'portrait'
-          const videoWidth = isPortrait ? 1080 : 1920
-          const videoHeight = isPortrait ? 1920 : 1080
-
-          try {
-            burnedBlob = await ffmpeg.burnSubtitles({
-              videoUrl: videoResult.videoUrl,
-              segments: generationStore.subtitleSegments,
-              font: draft.value.subtitleFont,
-              titleBackground: draft.value.subtitleBackground,
-              subtitleY: draft.value.subtitleY,
-              videoWidth,
-              videoHeight,
-              title: draft.value.title || undefined,
-              titleY: draft.value.titleY,
-            })
-          } catch (burnErr) {
-            console.warn('[Video Save] Subtitle burning failed:', burnErr)
-            toastStore.warning('字幕燒錄失敗，將儲存無字幕版本')
-            burnedBlob = null
-          }
-        }
-
-        // 3. Upload video (burned or original)
-        let supabaseVideoUrl: string
-
-        if (burnedBlob) {
-          // Upload burned blob
-          supabaseVideoUrl = await uploadBlobToStorage(burnedBlob, userId)
-          console.log('[Video Save] Burned video uploaded:', supabaseVideoUrl)
-        } else {
-          // Upload original video URL
-          supabaseVideoUrl = await uploadVideoToStorage(videoResult.videoUrl, userId)
-          console.log('[Video Save] Original video uploaded:', supabaseVideoUrl)
-        }
-
-        // 4. Save to database
+        // Save to database
         await createVideo({
           user_id: userId,
           transcript: draft.value.transcript,
@@ -580,7 +497,7 @@ async function handleContinueToVideo() {
           voice_preview: draft.value.voicePreview?.name || null,
         })
         console.log('[Video Save] Database record created')
-        toastStore.success(burnedBlob ? '帶字幕影片已儲存' : '影片已儲存（無字幕）')
+        toastStore.success('影片已儲存')
       } catch (uploadErr: any) {
         console.error('[Video Save] Upload failed:', uploadErr)
         toastStore.warning('雲端儲存失敗，嘗試使用臨時連結...')

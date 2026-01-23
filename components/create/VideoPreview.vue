@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Play, Pause, RotateCcw, Download, Loader2, VolumeX, Mic, Type, Video, Check, Lightbulb } from 'lucide-vue-next'
+import { Play, Pause, RotateCcw, Download, Loader2, VolumeX, Mic, Type, Video, Check, Lightbulb, RefreshCcw } from 'lucide-vue-next'
 
 const generationStore = useGenerationStore()
 const { stage, isGenerating } = storeToRefs(generationStore)
@@ -13,20 +13,53 @@ const aspectRatioClass = computed(() => {
   return draft.value.aspectRatio === 'portrait' ? 'aspect-[9/16]' : 'aspect-video'
 })
 
-// 計算旋轉後的縮放比例（90° 或 270° 時需要放大讓短邊填滿，無黑邊）
+// ============================================
+// Image Pan (平移調整顯示位置)
+// ============================================
+const imagePanZoom = useImagePanZoom({
+  initialPanX: draft.value.avatarPanX ?? 0,
+  initialPanY: draft.value.avatarPanY ?? 0,
+})
+
+// 同步 pan 到 store
+watch(
+  [() => imagePanZoom.panX.value, () => imagePanZoom.panY.value],
+  ([panX, panY]) => {
+    generationStore.updateDraft({
+      avatarPanX: panX,
+      avatarPanY: panY,
+    })
+  }
+)
+
+// 當 store 中的值變化時同步到 composable（例如切換圖片時重置）
+watch(
+  () => [draft.value.avatarPanX, draft.value.avatarPanY],
+  ([panX, panY]) => {
+    if (panX !== imagePanZoom.panX.value || panY !== imagePanZoom.panY.value) {
+      imagePanZoom.setValues({ panX, panY })
+    }
+  }
+)
+
+// 是否有自訂裁切（用於顯示重置按鈕）
+const hasCustomCrop = computed(() => {
+  return draft.value.avatarPanX !== 0 || draft.value.avatarPanY !== 0
+})
+
+// 重置圖片位置
+function resetImagePosition() {
+  imagePanZoom.reset()
+  generationStore.updateDraft({
+    avatarPanX: 0,
+    avatarPanY: 0,
+  })
+}
+
+// 純旋轉 transform（用於已生成影片時的 audio-only 預覽）
 const rotationTransform = computed(() => {
   const rotation = draft.value.avatarRotation || 0
-  const normalizedRotation = ((rotation % 360) + 360) % 360
-
-  // 旋轉 90° 或 270° 時，使用對角線比例確保完全覆蓋
-  // 對於 9:16 容器，對角線/短邊 ≈ 2.04
-  if (normalizedRotation === 90 || normalizedRotation === 270) {
-    const aspectRatio = 16 / 9
-    const scale = Math.sqrt(1 + aspectRatio * aspectRatio) // ≈ 2.04
-    return `rotate(${rotation}deg) scale(${scale})`
-  }
-
-  return `rotate(${rotation}deg)`
+  return rotation !== 0 ? `rotate(${rotation}deg)` : ''
 })
 
 // 標題拖曳 - 無限制
@@ -790,12 +823,47 @@ const formattedRemainingTime = computed(() => {
 
       <!-- Avatar Preview (no result yet) -->
       <template v-else-if="draft.avatarPreview">
-        <img
-          :src="draft.avatarPreview"
-          alt="Avatar preview"
-          class="w-full h-full object-cover"
-          :style="{ transform: rotationTransform }"
-        />
+        <!-- Pan Container -->
+        <div
+          class="w-full h-full overflow-hidden relative cursor-grab active:cursor-grabbing"
+          :style="imagePanZoom.handlers.style"
+          @pointerdown="imagePanZoom.handlers.onPointerDown"
+          @pointermove="imagePanZoom.handlers.onPointerMove"
+          @pointerup="imagePanZoom.handlers.onPointerUp"
+          @pointercancel="imagePanZoom.handlers.onPointerCancel"
+          @touchstart="imagePanZoom.handlers.onTouchStart"
+          @touchmove="imagePanZoom.handlers.onTouchMove"
+          @touchend="imagePanZoom.handlers.onTouchEnd"
+        >
+          <img
+            :src="draft.avatarPreview"
+            alt="Avatar preview"
+            class="w-full h-full object-cover"
+            :style="{
+              objectPosition: imagePanZoom.objectPosition.value,
+              transform: rotationTransform,
+            }"
+            draggable="false"
+          />
+        </div>
+
+        <!-- Reset Position Button -->
+        <button
+          v-if="hasCustomCrop"
+          class="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors z-20"
+          title="重置位置"
+          @click="resetImagePosition"
+        >
+          <RefreshCcw class="w-4 h-4" />
+        </button>
+
+        <!-- Pan Hint -->
+        <div
+          v-if="!hasCustomCrop && !isGenerating"
+          class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full opacity-0 hover:opacity-100 transition-opacity pointer-events-none z-10"
+        >
+          拖曳調整位置
+        </div>
 
         <!-- Title Overlay - Draggable -->
         <div

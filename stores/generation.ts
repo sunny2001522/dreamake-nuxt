@@ -43,6 +43,8 @@ interface GenerationDraft {
   selectedVoiceId: number | null
   avatarPreview?: string
   avatarRotation: number // 照片旋轉角度 (0, 90, 180, 270)
+  avatarPanX: number // 照片水平偏移 (-1 ~ 1)
+  avatarPanY: number // 照片垂直偏移 (-1 ~ 1)
   voicePreview?: { name: string; speakerId?: string }
   aspectRatio: AspectRatio
   subtitleEnabled: boolean
@@ -62,6 +64,8 @@ const DEFAULT_DRAFT: GenerationDraft = {
   selectedVoiceId: null,
   avatarPreview: undefined,
   avatarRotation: 0,
+  avatarPanX: 0,
+  avatarPanY: 0,
   voicePreview: undefined,
   aspectRatio: 'portrait',
   subtitleEnabled: true,
@@ -148,6 +152,8 @@ export const useGenerationStore = defineStore('generation', () => {
     draft.value.selectedImageId = imageId
     draft.value.avatarPreview = preview
     draft.value.avatarRotation = 0 // 切換照片時重置旋轉
+    draft.value.avatarPanX = 0 // 切換照片時重置平移
+    draft.value.avatarPanY = 0
   }
 
   // Set avatar rotation
