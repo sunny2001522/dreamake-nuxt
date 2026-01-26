@@ -225,6 +225,29 @@ async function handleGenerateVoiceOnly() {
         subscriptionStore.loadSubscription(userId)
       }
     }
+
+    // Background save to database (non-blocking)
+    ;(async () => {
+      try {
+        await createVideo({
+          user_id: userId,
+          transcript: draft.value.transcript,
+          video_url: null, // 僅語音，沒有影片
+          original_video_url: null,
+          audio_url: result.audioUrl,
+          aspect_ratio: draft.value.aspectRatio,
+          status: 'completed',
+          speaker_id: speakerId,
+          title: draft.value.title || null,
+          avatar_preview: draft.value.avatarPreview || null,
+          subtitle_style: draft.value.subtitleEnabled ? draft.value.subtitleFont : 'none',
+          voice_preview: draft.value.voicePreview?.name || null,
+        })
+        console.log('[Voice Save] Database record created')
+      } catch (dbErr: any) {
+        console.error('[Voice Save] Database save failed:', dbErr)
+      }
+    })()
   } catch (err: any) {
     console.error('Voice generation failed:', err)
     generationStore.setError(err.message || '語音生成失敗')

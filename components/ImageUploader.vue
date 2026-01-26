@@ -267,6 +267,12 @@ async function handleDeleteImage(event: Event, image: SavedImage) {
   const deleteKey = image.supabaseId || String(image.id);
   deletingId.value = deleteKey;
   try {
+    // 只有 Supabase 的圖片需要呼叫 API 刪除
+    if (image.supabaseId) {
+      const { deleteImage } = useImageStorage();
+      await deleteImage(image.supabaseId, authStore.authInfo?.sub || '');
+    }
+
     savedImages.value = savedImages.value.filter(
       (img) => (img.supabaseId || String(img.id)) !== deleteKey
     );
