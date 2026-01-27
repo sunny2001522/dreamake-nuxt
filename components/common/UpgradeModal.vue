@@ -16,11 +16,15 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
+const { track } = useEventTracker()
+
 function close() {
   emit('update:modelValue', false)
 }
 
 function handleUpgrade() {
+  // 埋點：點擊升級方案
+  track('click_upgrade')
   close()
   navigateTo('/pricing')
 }

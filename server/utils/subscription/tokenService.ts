@@ -155,12 +155,32 @@ export async function getUserPlan(userId: string): Promise<SubscriptionPlan | nu
 
 /**
  * 初始化新用戶的訂閱和 Token
+ * 處理並發請求，避免 duplicate key 錯誤
  */
 export async function initializeUserSubscription(userId: string): Promise<{
   subscription: DbUserSubscription
   balance: TokenBalance
 }> {
   const supabase = getSupabaseAdmin()
+
+  // 先檢查是否已有訂閱（處理並發請求）
+  const { data: existingSub } = await supabase
+    .from('user_subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (existingSub) {
+    // 已存在訂閱，獲取餘額並返回
+    const existingBalance = await getTokenBalance(userId)
+    if (existingBalance) {
+      return {
+        subscription: existingSub as DbUserSubscription,
+        balance: existingBalance,
+      }
+    }
+    // 如果有訂閱但沒餘額，繼續建立餘額
+  }
 
   const now = new Date()
   // 免費方案有效期為一個月
@@ -176,38 +196,109 @@ export async function initializeUserSubscription(userId: string): Promise<{
 
   const tokensMonthly = freePlan?.tokens_monthly || 100
 
-  // 建立用戶訂閱
-  const { data: subscription, error: subError } = await supabase
-    .from('user_subscriptions')
-    .insert({
-      user_id: userId,
-      plan_code: 'free',
-      status: 'active',
-      current_period_start: now.toISOString(),
-      current_period_end: periodEnd.toISOString(),
-    })
-    .select()
-    .single()
+  let subscription: DbUserSubscription
 
-  if (subError) {
-    throw new Error(`Failed to create subscription: ${subError.message}`)
+  // 只有在沒有現有訂閱時才建立
+  if (!existingSub) {
+    // 使用 upsert 來處理並發情況
+    const { data: newSub, error: subError } = await supabase
+      .from('user_subscriptions')
+      .upsert({
+        user_id: userId,
+        plan_code: 'free',
+        status: 'active',
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+      }, {
+        onConflict: 'user_id',
+      })
+      .select()
+      .single()
+
+    if (subError) {
+      // 如果 upsert 也失敗，嘗試查詢現有記錄（可能是並發請求剛插入）
+      const { data: fallbackSub } = await supabase
+        .from('user_subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+      if (fallbackSub) {
+        subscription = fallbackSub as DbUserSubscription
+      } else {
+        throw new Error(`Failed to create subscription: ${subError.message}`)
+      }
+    } else {
+      subscription = newSub as DbUserSubscription
+    }
+  } else {
+    subscription = existingSub as DbUserSubscription
   }
 
-  // 建立 Token 餘額
+  // 檢查是否已有餘額
+  const { data: existingBal } = await supabase
+    .from('token_balances')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (existingBal) {
+    const dbBalance = existingBal as DbTokenBalance
+    return {
+      subscription,
+      balance: {
+        id: dbBalance.id,
+        userId: dbBalance.user_id,
+        balance: dbBalance.balance,
+        tokensUsedThisPeriod: dbBalance.tokens_used_this_period,
+        tokensGrantedThisPeriod: dbBalance.tokens_granted_this_period,
+        periodStart: dbBalance.period_start,
+        periodEnd: dbBalance.period_end,
+        updatedAt: dbBalance.updated_at,
+      },
+    }
+  }
+
+  // 建立 Token 餘額（使用 upsert）
   const { data: balance, error: balError } = await supabase
     .from('token_balances')
-    .insert({
+    .upsert({
       user_id: userId,
       balance: tokensMonthly,
       tokens_used_this_period: 0,
       tokens_granted_this_period: tokensMonthly,
       period_start: now.toISOString(),
       period_end: periodEnd.toISOString(),
+    }, {
+      onConflict: 'user_id',
     })
     .select()
     .single()
 
   if (balError) {
+    // 如果失敗，嘗試查詢現有記錄
+    const { data: fallbackBal } = await supabase
+      .from('token_balances')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (fallbackBal) {
+      const dbBalance = fallbackBal as DbTokenBalance
+      return {
+        subscription,
+        balance: {
+          id: dbBalance.id,
+          userId: dbBalance.user_id,
+          balance: dbBalance.balance,
+          tokensUsedThisPeriod: dbBalance.tokens_used_this_period,
+          tokensGrantedThisPeriod: dbBalance.tokens_granted_this_period,
+          periodStart: dbBalance.period_start,
+          periodEnd: dbBalance.period_end,
+          updatedAt: dbBalance.updated_at,
+        },
+      }
+    }
     throw new Error(`Failed to create token balance: ${balError.message}`)
   }
 
@@ -223,7 +314,7 @@ export async function initializeUserSubscription(userId: string): Promise<{
   const dbBalance = balance as DbTokenBalance
 
   return {
-    subscription: subscription as DbUserSubscription,
+    subscription,
     balance: {
       id: dbBalance.id,
       userId: dbBalance.user_id,

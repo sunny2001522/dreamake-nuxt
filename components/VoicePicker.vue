@@ -133,6 +133,12 @@ const validVoices = computed(() =>
   savedVoices.value.filter((v) => v.speakerId)
 );
 
+// 解析 originalFileName 為音檔陣列
+const parseSourceFiles = (originalFileName: string): string[] => {
+  if (!originalFileName) return [];
+  return originalFileName.split(", ").filter(Boolean);
+};
+
 // Multi-file upload computed properties
 const readyFiles = computed(() =>
   pendingFiles.value.filter((f) => f.status === "ready")
@@ -456,6 +462,17 @@ async function cloneVoice(file: File, name: string) {
     // Select the voice
     generationStore.setVoice(voice);
 
+    // Save to preferences
+    if (voice.supabaseId) {
+      const { updateVoicePreference } = usePreferencesStorage();
+      try {
+        await updateVoicePreference(userId, voice.supabaseId);
+        console.log("Voice preference saved after clone:", voice.supabaseId);
+      } catch (err) {
+        console.error("Failed to save voice preference:", err);
+      }
+    }
+
     toastStore.success("語音克隆完成！");
     showModal.value = false;
 
@@ -540,6 +557,17 @@ async function cloneBatchVoice() {
 
     // Select the voice
     generationStore.setVoice(voice);
+
+    // Save to preferences
+    if (voice.supabaseId) {
+      const { updateVoicePreference } = usePreferencesStorage();
+      try {
+        await updateVoicePreference(userId, voice.supabaseId);
+        console.log("Voice preference saved after clone:", voice.supabaseId);
+      } catch (err) {
+        console.error("Failed to save voice preference:", err);
+      }
+    }
 
     // Clear pending files
     clearPendingFiles();
@@ -1265,9 +1293,17 @@ onUnmounted(() => {
                       <p class="text-sm font-medium text-stone-800 truncate">
                         {{ voice.name }}
                       </p>
-                      <p class="text-xs text-stone-500">
-                        {{ voice.originalFileName }}
-                      </p>
+                      <!-- 音檔來源標籤 -->
+                      <div class="flex flex-wrap gap-1 mt-1">
+                        <span
+                          v-for="(file, index) in parseSourceFiles(voice.originalFileName)"
+                          :key="index"
+                          class="text-[10px] text-stone-600 bg-stone-200 px-2 py-0.5 rounded-full truncate max-w-[120px]"
+                          :title="file"
+                        >
+                          {{ file }}
+                        </span>
+                      </div>
                     </div>
 
                     <button

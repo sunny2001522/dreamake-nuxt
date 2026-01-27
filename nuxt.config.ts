@@ -33,7 +33,51 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxtjs/supabase',
     '@vueuse/nuxt',
+    'nuxt-api-shield',
   ],
+
+  // Rate Limiting 設定
+  nuxtApiShield: {
+    // 全域預設限制
+    limit: {
+      max: 60,        // 每 60 秒最多 60 次請求
+      duration: 60,   // 時間窗口（秒）
+      ban: 300,       // 超過限制後封鎖 5 分鐘
+    },
+    delayOnBan: true,
+    errorMessage: '請求過於頻繁，請稍後再試',
+    retryAfterHeader: true,
+
+    // 各路由的個別限制
+    routes: [
+      // AI 生成 - 嚴格限制（高成本操作）
+      { path: '/api/generate', max: 3, duration: 60 },
+      { path: '/api/transcript/generate', max: 10, duration: 60 },
+      { path: '/api/voice/clone', max: 5, duration: 300 },
+      { path: '/api/voice/tts', max: 20, duration: 60 },
+      { path: '/api/media/analyze', max: 10, duration: 60 },
+      { path: '/api/title', max: 20, duration: 60 },
+      { path: '/api/subtitle', max: 20, duration: 60 },
+
+      // 上傳端點 - 中等限制
+      { path: '/api/upload', max: 30, duration: 60 },
+      { path: '/api/images', max: 30, duration: 60 },
+      { path: '/api/video/upload', max: 10, duration: 60 },
+
+      // Token 操作 - 中等限制
+      { path: '/api/tokens/consume', max: 30, duration: 60 },
+      { path: '/api/tokens/check', max: 60, duration: 60 },
+
+      // 狀態查詢 - 較寬鬆
+      { path: '/api/tokens/balance', max: 120, duration: 60 },
+      { path: '/api/subscription/current', max: 120, duration: 60 },
+      { path: '/api/video', max: 120, duration: 60 },
+      { path: '/api/media/status', max: 120, duration: 60 },
+
+      // 管理員端點
+      { path: '/api/admin', max: 30, duration: 60 },
+    ],
+  },
 
   postcss: {
     plugins: {
@@ -79,6 +123,7 @@ export default defineNuxtConfig({
       profileServiceDomain: '',
       fanbarCheckoutUrl: process.env.NUXT_PUBLIC_FANBAR_CHECKOUT_URL || 'https://test.cmoney.tw/cashflow/checkout',
       fanbarFunctionId: process.env.NUXT_PUBLIC_FANBAR_FUNCTION_ID || '12137',
+      googleSheetsWebhook: process.env.NUXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK || '',
     },
   },
 
@@ -95,9 +140,14 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    routeRules: {
-      '/api/**': { cors: true },
+    // Rate limiting storage (Vercel 相容)
+    storage: {
+      shield: {
+        driver: 'memory',
+      },
     },
+    // 注意：CORS 現在由 server/middleware/01.cors.ts 處理
+    // 不再使用 { cors: true }
   },
 
   typescript: {
