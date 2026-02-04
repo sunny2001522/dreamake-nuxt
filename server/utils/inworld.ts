@@ -151,6 +151,14 @@ export async function cloneVoice(
 
   const cloneUrl = `${INWORLD_CLONE_BASE_URL}/${workspaceId}/voices:clone`
 
+  // Inworld derives internal "name" from displayName, requiring only
+  // lowercase letters, digits, underscores, hyphens (max 61 chars).
+  // Sanitize displayName to ensure the derived name is valid.
+  const safeDisplayName = voiceName
+    .replace(/[^a-zA-Z0-9_\s-]/g, '')
+    .trim()
+    .slice(0, 60) || `voice_${Date.now()}`
+
   const response = await fetch(cloneUrl, {
     method: 'POST',
     headers: {
@@ -158,7 +166,7 @@ export async function cloneVoice(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      displayName: voiceName,
+      displayName: safeDisplayName,
       langCode: 'ZH_CN', // Standard Mandarin (no ZH_TW available, AUTO detects as dialect)
       voiceSamples: voiceSamples,
       audioProcessingConfig: {
