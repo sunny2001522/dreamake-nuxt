@@ -150,6 +150,14 @@ export default defineNuxtConfig({
     // 不再使用 { cors: true }
   },
 
+  vite: {
+    server: {
+      watch: {
+        ignored: ['**/my-video/**'],
+      },
+    },
+  },
+
   typescript: {
     strict: true,
   },
