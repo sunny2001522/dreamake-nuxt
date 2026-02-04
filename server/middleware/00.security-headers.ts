@@ -106,6 +106,9 @@ function buildContentSecurityPolicy(): string {
     // 基礎 URI 限制
     "base-uri 'self'",
 
+    // Web Worker - 允許 blob:（Vite HMR 需要）
+    "worker-src 'self' blob:",
+
     // 禁止 object/embed
     "object-src 'none'",
   ]
