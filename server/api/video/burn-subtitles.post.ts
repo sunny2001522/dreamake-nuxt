@@ -11,8 +11,9 @@ export interface BurnSubtitlesRequest {
   assContent?: string // Pre-generated ASS content from client
 }
 
-const MAX_RETRIES = 2
+const MAX_RETRIES = 3
 const RETRY_DELAY = 3000 // 3 seconds
+const FETCH_TIMEOUT = 180_000 // 3 minutes — FFmpeg processing can take 1-2 min
 
 /**
  * Call Render FFmpeg service with automatic retry for cold start handling
@@ -23,23 +24,39 @@ async function callRenderWithRetry(
   body: object,
   attempt = 1
 ): Promise<Response> {
-  const response = await fetch(`${url}/burn`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': apiKey,
-    },
-    body: JSON.stringify(body),
-  })
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
 
-  // If 5xx error and retries remaining, wait and retry (handle cold start)
-  if (response.status >= 500 && attempt < MAX_RETRIES) {
-    console.log(`Render service error (attempt ${attempt}), retrying in ${RETRY_DELAY}ms...`)
-    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
-    return callRenderWithRetry(url, apiKey, body, attempt + 1)
+    const response = await fetch(`${url}/burn`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    // If 5xx error and retries remaining, wait and retry (handle cold start)
+    if (response.status >= 500 && attempt < MAX_RETRIES) {
+      console.log(`Render service error (attempt ${attempt}), retrying in ${RETRY_DELAY}ms...`)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+      return callRenderWithRetry(url, apiKey, body, attempt + 1)
+    }
+
+    return response
+  } catch (error: any) {
+    // Retry on timeout/network errors
+    if (attempt < MAX_RETRIES) {
+      console.log(`Render fetch failed (attempt ${attempt}): ${error.message}, retrying in ${RETRY_DELAY}ms...`)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+      return callRenderWithRetry(url, apiKey, body, attempt + 1)
+    }
+    throw error
   }
-
-  return response
 }
 
 /**
