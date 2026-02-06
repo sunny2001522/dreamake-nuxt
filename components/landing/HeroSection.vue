@@ -2,7 +2,7 @@
 import { Clapperboard, Mic, Image, FileText } from "lucide-vue-next";
 import exampleFemale from "~/assets/video/example-female.mp4";
 import exampleAnime from "~/assets/video/example-anime.mp4";
-import exampleMale from "~/assets/video/exmaple-male.mp4";
+import exampleMale from "~/assets/video/example-male.mp4";
 
 const emit = defineEmits<{
   start: [];
